@@ -1,0 +1,2555 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PIXEL PENALTY SHOWDOWN + VAR: Clássicos & Mundial Live</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Chakra+Petch:wght@600;700;800&family=Press+Start+2P&family=Inter:wght@500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #050807;
+            color: #ffffff;
+            overflow-x: hidden;
+            user-select: none;
+            margin: 0;
+            padding: 0;
+        }
+        .font-arcade {
+            font-family: 'Black Ops One', cursive;
+            letter-spacing: 0.5px;
+        }
+        .font-chakra {
+            font-family: 'Chakra Petch', sans-serif;
+        }
+        .font-pixel {
+            font-family: 'Press Start 2P', monospace;
+        }
+        .stream-container {
+            width: 414px;
+            height: 736px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 0 50px rgba(0, 0, 0, 0.95), 0 0 2px rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            background: #062814;
+            flex-shrink: 0;
+            transform-origin: center center;
+        }
+        body.obs-clean-mode {
+            background-color: #000000 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        body.obs-clean-mode .stream-container {
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+        }
+        @keyframes tickerMarquee {
+            0% { transform: translateX(0%); }
+            100% { transform: translateX(-50%); }
+        }
+        .ticker-wrap {
+            overflow: hidden;
+            white-space: nowrap;
+            position: relative;
+            width: 100%;
+        }
+        .ticker-move {
+            display: inline-block;
+            white-space: nowrap;
+            animation: tickerMarquee 38s linear infinite;
+        }
+        @keyframes ballonGlow {
+            0%, 100% { box-shadow: 0 0 14px rgba(250, 204, 21, 0.45), inset 0 0 10px rgba(250, 204, 21, 0.2); }
+            50% { box-shadow: 0 0 24px rgba(250, 204, 21, 0.9), inset 0 0 18px rgba(250, 204, 21, 0.4); }
+        }
+        .ballon-glow {
+            animation: ballonGlow 2s infinite ease-in-out;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 12px rgba(250, 204, 21, 0.75); }
+            50% { box-shadow: 0 0 22px rgba(250, 204, 21, 1); }
+        }
+        .leader-card-glow {
+            animation: pulseGlow 1.5s infinite;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    </style>
+</head>
+<body id="mainBody" class="min-h-screen flex flex-col lg:flex-row items-center justify-center p-2 lg:p-6 gap-6">
+
+    <!-- TOAST DE NOTIFICAÇÃO -->
+    <div id="toastNotification" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden bg-emerald-600 border border-emerald-400 text-white font-bold text-xs px-5 py-3 rounded-xl shadow-2xl items-center gap-2 transition-all">
+        <span>✅</span>
+        <span id="toastMessage">Link copiado com sucesso!</span>
+    </div>
+
+    <!-- BANNER DE ATIVAÇÃO DE ÁUDIO COM 1 CLIQUE -->
+    <div id="audioUnlockBanner" onclick="activateAllStadiumAudio()" class="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 cursor-pointer bg-gradient-to-r from-amber-500 via-yellow-400 to-emerald-400 text-black font-black text-xs px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(250,204,21,0.9)] flex items-center gap-2 animate-bounce border-2 border-white">
+        <span>🔊 CLIQUE AQUI PARA LIGAR A TORCIDA + MÚSICA DO ESTÁDIO!</span>
+    </div>
+
+    <!-- BOTÃO DISCRETO NO CELULAR (?mode=obs) -->
+    <button id="mobileQuickMenuBtn" onclick="toggleMobileDrawer()" title="Menu Rápido" class="fixed top-2.5 right-2.5 z-50 bg-black/40 hover:bg-black/80 text-white/60 hover:text-white font-bold w-8 h-8 rounded-full flex items-center justify-center text-xs border border-white/15 backdrop-blur-sm transition">
+        ⚙️
+    </button>
+
+    <!-- GAVETA DE CONTROLE RÁPIDO NO CELULAR -->
+    <div id="mobileDrawerModal" class="fixed inset-0 z-50 hidden bg-black/80 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-900 border-2 border-emerald-500/60 rounded-2xl w-full max-w-sm p-4 shadow-2xl space-y-3 text-white">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-2">
+                <div class="text-xs font-black uppercase text-emerald-300">⚽ Controle Rápido no Celular</div>
+                <button onclick="toggleMobileDrawer()" class="bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-bold px-2.5 py-1 rounded-lg">✕ Fechar</button>
+            </div>
+
+            <div class="bg-gray-950 p-2.5 rounded-xl border border-gray-800 space-y-2">
+                <label class="text-[10px] font-black uppercase text-emerald-400 block">🔌 Conectar Live do TikTok (@usuario):</label>
+                <div class="flex gap-1.5">
+                    <input id="mobileTiktokInput" type="text" placeholder="@seu_usuario" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                    <button onclick="connectToTikTokFromMobile()" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3 py-1.5 rounded-lg">Conectar</button>
+                </div>
+                <div id="mobileConnStatus" class="text-[10px] text-amber-300 font-bold">⚡ Status: Aguardando comando...</div>
+                <div id="mobileLiveLogBox" class="bg-black/90 border border-gray-800 rounded p-1.5 text-[9px] font-mono text-gray-300 h-14 overflow-y-auto">
+                    <div>📡 Aguardando conexão com o TikTok...</div>
+                </div>
+            </div>
+
+            <button onclick="enterTrueFullscreen()" class="w-full bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-black text-xs py-2.5 px-3 rounded-xl shadow-lg uppercase">
+                📱 ATIVAR TELA CHEIA (SUMIR BARRA DE LINK)
+            </button>
+
+            <div class="grid grid-cols-2 gap-2">
+                <button id="mobileBotBtn" onclick="toggleChaosBot()" class="bg-amber-500 text-black font-black text-[11px] py-2 px-2 rounded-xl shadow uppercase">🔥 Simulador: ON/OFF</button>
+                <button onclick="activateAllStadiumAudio()" class="bg-emerald-700 text-white font-black text-[11px] py-2 px-2 rounded-xl shadow uppercase">🔊 Ligar Torcida + Música</button>
+            </div>
+
+            <div class="flex justify-between items-center pt-1">
+                <button onclick="broadcastAndRun('start_voting', {})" class="bg-amber-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg">🗳️ Votação Times (60s)</button>
+                <button onclick="toggleObsMode(); toggleMobileDrawer();" class="bg-indigo-600 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg">🖥️ Painel PC</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================
+         TELA DA LIVE (9:16 VERTICAL - BLINDADA ANTI-OCR DO TIKTOK)
+         ========================================================== -->
+    <div id="streamFrame" onclick="tryAutoUnlockAudio()" class="stream-container border border-gray-800 flex flex-col justify-between">
+        
+        <!-- CANVAS 2D PIXEL ART -->
+        <canvas id="gameCanvas" width="414" height="736" class="absolute inset-0 z-0"></canvas>
+
+        <!-- CERIMÔNIA DE NOVO LÍDER DA BOLA DE OURO -->
+        <div id="ballonDorCeremonyOverlay" class="hidden absolute inset-x-3 top-44 z-40 pointer-events-none">
+            <div class="bg-gradient-to-r from-yellow-900/95 via-amber-700/95 to-yellow-900/95 border-2 border-yellow-300 rounded-2xl p-2 text-center shadow-[0_0_40px_rgba(250,204,21,0.95)]">
+                <div class="text-[8.5px] font-black text-yellow-200 uppercase tracking-widest">👑🏆 NOVO LÍDER DA BOLA DE OURO! 🏆👑</div>
+                <div class="flex items-center justify-center gap-2 mt-1">
+                    <img id="ceremonyBallonAvatar" src="https://placehold.co/56x56/78350f/fde047?text=VIP" class="w-10 h-10 rounded-full border-2 border-white object-cover shadow-lg">
+                    <div class="text-left">
+                        <div id="ceremonyBallonName" class="font-chakra font-black text-xs text-white leading-tight">@TorcedorVIP</div>
+                        <div id="ceremonyBallonPts" class="text-[9.5px] font-extrabold text-yellow-300">Assumiu o 1º Lugar!</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==========================================================
+             1. CABEÇALHO DO TOPO (100% BLINDADO CONTRA OCR DO TIKTOK)
+             ========================================================== -->
+        <div class="relative z-10 px-2 pt-1.5 bg-gradient-to-b from-black/95 via-black/80 to-transparent">
+            <!-- LINHA 1: SIMULADOR + RELÓGIO CENTRAL + FASE -->
+            <div class="flex items-center justify-between bg-black/85 border border-emerald-500/40 rounded-xl px-2.5 py-1">
+                <div id="hudLiveBadge" class="flex items-center gap-1.5">
+                    <span id="hudLiveDot" class="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping"></span>
+                    <span id="hudLiveText" class="text-[8.5px] font-black tracking-wider uppercase text-amber-300">ARENA AO VIVO</span>
+                </div>
+                <div id="timerDisplay" class="font-chakra font-extrabold text-base text-yellow-400 tracking-widest bg-emerald-950/90 px-3 py-0.5 rounded-lg border border-yellow-400/40">
+                    05:00
+                </div>
+                <div id="phaseBadgeHud" class="text-[8px] font-black bg-emerald-900/90 text-emerald-200 px-2 py-0.5 rounded border border-emerald-400/30 uppercase">
+                    ⚽ PÊNALTIS
+                </div>
+            </div>
+
+            <!-- LINHA 2: PLACAR DE ESTÁDIO (DIGITE 1 vs DIGITE 2) -->
+            <div class="mt-1 bg-gradient-to-b from-slate-900/95 to-black/95 border-2 border-yellow-400/60 rounded-xl p-1.5 shadow-lg">
+                <div class="grid grid-cols-11 items-center gap-1">
+                    <!-- TIME 1 (ESQUERDA) -->
+                    <div id="team0CardBorder" class="col-span-4 flex items-center gap-1.5 bg-red-950/50 border border-red-500/40 rounded-lg p-1">
+                        <div id="team0LogoBox" class="w-7 h-7 shrink-0 flex items-center justify-center"></div>
+                        <div class="min-w-0 leading-tight">
+                            <div class="text-[7.5px] font-black bg-yellow-400 text-black px-1.5 rounded inline-block">DIGITE 1</div>
+                            <div id="team0NameHud" class="font-chakra font-black text-[10px] text-white truncate mt-0.5 uppercase">FLAMENGO</div>
+                        </div>
+                    </div>
+
+                    <!-- PLACAR CENTRAL -->
+                    <div class="col-span-3 flex flex-col items-center justify-center bg-black border border-yellow-500/40 rounded-lg py-0.5 px-1">
+                        <div class="flex items-center gap-1 font-chakra font-black text-xl leading-none">
+                            <span id="scoreTeam0" class="text-yellow-300">0</span>
+                            <span class="text-gray-500 text-xs">:</span>
+                            <span id="scoreTeam1" class="text-cyan-300">0</span>
+                        </div>
+                        <span class="text-[6px] text-emerald-400 font-black uppercase tracking-widest mt-0.5">GOLS</span>
+                    </div>
+
+                    <!-- TIME 2 (DIREITA) -->
+                    <div id="team1CardBorder" class="col-span-4 flex items-center justify-end gap-1.5 bg-blue-950/50 border border-blue-500/40 rounded-lg p-1 text-right">
+                        <div class="min-w-0 leading-tight">
+                            <div class="text-[7.5px] font-black bg-cyan-400 text-black px-1.5 rounded inline-block">DIGITE 2</div>
+                            <div id="team1NameHud" class="font-chakra font-black text-[10px] text-white truncate mt-0.5 uppercase">CORINTHIANS</div>
+                        </div>
+                        <div id="team1LogoBox" class="w-7 h-7 shrink-0 flex items-center justify-center"></div>
+                    </div>
+                </div>
+                <div class="hidden">
+                    <div id="tugBar0"></div>
+                    <div id="tugBar1"></div>
+                </div>
+            </div>
+
+            <!-- LINHA 3: 🏆 CRAQUE DA BOLA DE OURO (RANKING DE INTERAÇÃO) -->
+            <div id="ballonDorBanner" class="mt-1 bg-gradient-to-r from-amber-950/95 via-yellow-900/95 to-amber-950/95 border-2 border-yellow-400 rounded-xl px-2 py-1 flex items-center justify-between gap-1.5 ballon-glow transition-all">
+                <div class="flex items-center gap-2 min-w-0">
+                    <div class="relative shrink-0">
+                        <img id="ballonDorAvatar" src="https://api.dicebear.com/7.x/avataaars/svg?seed=BolaDeOuro" class="w-8 h-8 rounded-full border-2 border-yellow-300 object-cover shadow-md" alt="Bola de Ouro">
+                        <span class="absolute -top-1.5 -left-1 text-xs drop-shadow">👑</span>
+                        <span class="absolute -bottom-1 -right-1 text-[8px] bg-yellow-400 text-black font-black px-1 rounded-full border border-black">1º</span>
+                    </div>
+                    <div class="leading-tight min-w-0">
+                        <div class="flex items-center gap-1">
+                            <span class="text-[7.5px] font-black uppercase text-yellow-300 tracking-wider">🏆 BOLA DE OURO DA PARTIDA</span>
+                            <span id="ballonDorTeamTag" class="text-[7px] font-black bg-yellow-400 text-black px-1 rounded uppercase">CRAQUE FLA</span>
+                        </div>
+                        <div id="ballonDorName" class="text-[10px] font-black text-white truncate">@matheus_vip (💬 Digitou 1)</div>
+                        <div id="ballonDorRunnerUp" class="text-[7px] text-amber-200 truncate">🥈 2º: @lucas_mengao (10 XP)</div>
+                    </div>
+                </div>
+                <div class="shrink-0 text-right bg-black/85 border border-yellow-400/60 rounded-lg px-2 py-0.5">
+                    <div id="ballonDorPoints" class="font-chakra font-black text-xs text-yellow-300 leading-none">15 XP</div>
+                    <div id="ballonDorChaseHint" class="text-[6.5px] font-extrabold text-emerald-300 uppercase mt-0.5">DIFERENÇA: +6 XP!</div>
+                </div>
+            </div>
+
+            <!-- LINHA 4: BARRA DE ENERGIA DA TORCIDA + INVASOR -->
+            <div class="mt-1 grid grid-cols-12 gap-1 items-center">
+                <div class="col-span-7 bg-black/85 rounded-lg p-1 border border-pink-500/40">
+                    <div class="flex justify-between text-[7px] font-black mb-0.5">
+                        <span id="likeFuryLabel" class="text-pink-400">💗 ENERGIA DA TORCIDA (MODO 2X)</span>
+                        <span id="likeCounterHud" class="text-white">0 / 1.000</span>
+                    </div>
+                    <div class="w-full h-1.5 bg-gray-900 rounded-full overflow-hidden">
+                        <div id="likeProgressBar" class="h-full bg-gradient-to-r from-pink-500 via-rose-400 to-yellow-300 transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="followerMiniBadge" class="col-span-5 bg-cyan-950/80 rounded-lg p-1 border border-cyan-400/50 flex items-center gap-1 overflow-hidden">
+                    <img id="lastFollowerAvatar" src="https://placehold.co/32x32/083344/22d3ee?text=+" class="w-4 h-4 rounded-full border border-cyan-300 object-cover shrink-0" alt="Torcedor">
+                    <div class="leading-none overflow-hidden">
+                        <div class="text-[6.5px] text-cyan-300 font-black uppercase">🏃 NOVO TORCEDOR (+2 GOLS)</div>
+                        <div id="lastFollowerName" class="text-[8px] font-bold text-white truncate">Entre p/ correr no campo!</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LINHA 5: FILA DO PÊNALTI -->
+            <div class="mt-1 bg-black/90 border border-yellow-500/50 rounded-lg p-1 flex items-center gap-1.5">
+                <div class="bg-yellow-400 text-black text-[7.5px] font-black px-1.5 py-0.5 rounded uppercase shrink-0 leading-tight text-center">
+                    FILA DO<br>PÊNALTI
+                </div>
+                <div id="shootersQueueHud" class="flex items-center gap-1.5 overflow-x-hidden flex-1 min-h-[22px]">
+                    <span class="text-[8.5px] text-gray-300 font-bold">Digite 1 ou 2 no chat para entrar na fila!</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- OVERLAY DE VOTAÇÃO PRÉ-JOGO LIVRE (BLINDADO SEM PALAVRA PRESENTE) -->
+        <div id="preMatchVotingOverlay" class="hidden absolute inset-x-1.5 top-[188px] bottom-[134px] z-30 bg-gray-950/95 border-2 border-yellow-400 rounded-2xl p-2 flex-col justify-between shadow-[0_0_50px_rgba(0,0,0,0.95)] backdrop-blur-md">
+            
+            <div class="bg-gradient-to-r from-amber-500/20 via-yellow-500/30 to-amber-500/20 border border-yellow-400/60 rounded-xl p-1.5 text-center">
+                <div class="flex items-center justify-between px-1">
+                    <span class="text-[9px] font-black uppercase text-yellow-300 tracking-wider">🗳️ OS 2 MAIS VOTADOS SE ENFRENTAM!</span>
+                    <span class="bg-red-600 border border-red-300 text-white font-arcade text-xs px-2.5 py-0.5 rounded-full shadow animate-pulse" id="preVoteTimerBadge">60s</span>
+                </div>
+                <div class="text-[8px] text-white font-bold mt-0.5 leading-tight">
+                    💬 Digite <b class="text-emerald-300">B1 a B5</b> ou <b class="text-sky-300">E1 a E5</b> (ou nome do time) no chat para escolher o confronto!
+                </div>
+            </div>
+
+            <div class="bg-black/90 border-2 border-yellow-400 rounded-xl p-1.5 my-1 leader-card-glow">
+                <div class="flex items-center justify-between px-1 mb-1">
+                    <span class="text-[7px] font-black uppercase text-yellow-300 tracking-wider">👑 LÍDERES DO PRÓXIMO JOGO:</span>
+                    <span id="matchupTypeBadge" class="text-[7px] font-black uppercase bg-emerald-500 text-black px-1.5 py-0.2 rounded">🇧🇷 CLÁSSICO BRASILEIRO!</span>
+                </div>
+                <div class="grid grid-cols-7 items-center gap-1">
+                    <div class="col-span-3 flex items-center gap-1.5 bg-emerald-950/80 border border-yellow-400 rounded-lg p-1">
+                        <div id="leader1Logo" class="w-7 h-7 shrink-0"></div>
+                        <div class="overflow-hidden leading-tight">
+                            <div class="text-[7px] font-black text-yellow-300 uppercase">🥇 1º MAIS VOTADO</div>
+                            <div id="leader1Name" class="text-[10px] font-black text-white truncate">FLAMENGO</div>
+                            <div id="leader1Votes" class="text-[8px] font-arcade text-emerald-300">15 VOTOS</div>
+                        </div>
+                    </div>
+
+                    <div class="col-span-1 text-center font-arcade text-xs text-yellow-400">VS</div>
+
+                    <div class="col-span-3 flex items-center justify-end gap-1.5 bg-blue-950/80 border border-sky-400 rounded-lg p-1 text-right">
+                        <div class="overflow-hidden leading-tight">
+                            <div class="text-[7px] font-black text-sky-300 uppercase">🥈 2º MAIS VOTADO</div>
+                            <div id="leader2Name" class="text-[10px] font-black text-white truncate">CORINTHIANS</div>
+                            <div id="leader2Votes" class="text-[8px] font-arcade text-yellow-300">14 VOTOS</div>
+                        </div>
+                        <div id="leader2Logo" class="w-7 h-7 shrink-0"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-1.5 flex-1 overflow-hidden">
+                <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-1 flex flex-col justify-between">
+                    <div class="text-[8px] font-black text-center text-emerald-300 uppercase border-b border-emerald-500/30 pb-0.5">
+                        🇧🇷 BRASIL (DIGITE B1 A B5)
+                    </div>
+                    <div id="brazilVoteList" class="space-y-1 flex-1 flex flex-col justify-around py-0.5"></div>
+                </div>
+                <div class="bg-blue-950/40 border border-blue-500/40 rounded-xl p-1 flex flex-col justify-between">
+                    <div class="text-[8px] font-black text-center text-sky-300 uppercase border-b border-blue-500/30 pb-0.5">
+                        🇪🇺 EUROPA (DIGITE E1 A E5)
+                    </div>
+                    <div id="europeVoteList" class="space-y-1 flex-1 flex flex-col justify-around py-0.5"></div>
+                </div>
+            </div>
+
+            <div class="text-center text-[8px] font-black uppercase text-black bg-yellow-400 py-0.5 rounded mt-1">
+                ⚡ VALE BR x BR, EU x EU OU BR x EU! OS 2 MAIS VOTADOS JOGAM!
+            </div>
+        </div>
+
+        <!-- OVERLAY DE FIM DE PARTIDA -->
+        <div id="votingOverlay" class="hidden absolute inset-0 z-30 bg-black/92 backdrop-blur-md flex-col items-center justify-center p-5 text-center">
+            <div class="text-xs font-black uppercase tracking-widest text-yellow-400">🏆 APITO FINAL! CAMPEÃO DO CONFRONTO:</div>
+            <div id="winnerLogoBox" class="w-20 h-20 my-3 mx-auto"></div>
+            <div id="winnerAnnouncement" class="font-arcade text-3xl text-white mb-3 drop-shadow-[0_0_15px_rgba(250,204,21,0.8)]">FLAMENGO VENCEU!</div>
+            <div class="text-xs text-gray-300 mb-3">Abrindo votação para escolher os próximos times em:</div>
+            <div id="voteTimerText" class="font-arcade text-5xl text-yellow-400 mb-5">10s</div>
+            <button onclick="broadcastAndRun('start_voting', {})" class="bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs px-6 py-3 rounded-xl uppercase shadow-lg">
+                🗳️ Abrir Votação do Próximo Jogo Agora
+            </button>
+        </div>
+
+        <!-- ==========================================================
+             2. RODAPÉ BLINDADO ANTI-OCR (SÓ EMOJIS E COMANDOS DE JOGO!)
+             Zero palavras "Presente", "Doar", "Moeda" ou nomes de gifts
+             ========================================================== -->
+        <div class="relative z-10 px-2 pb-1.5">
+            <div class="bg-black/95 border-2 border-yellow-400/80 rounded-xl p-1.5 shadow-2xl">
+                <!-- CAIXA DE INSTRUÇÃO 100% SEGURA -->
+                <div class="bg-gradient-to-r from-yellow-500/25 via-amber-400/30 to-yellow-500/25 border border-yellow-400/80 rounded-lg px-2 py-0.5 mb-1 text-center">
+                    <div class="text-[8px] font-black text-yellow-300 uppercase tracking-wide">
+                        ⚡ COMO ESCOLHER SEU TIME E ATIVAR OS PODERES EM CAMPO:
+                    </div>
+                    <div id="footerMainInstruction" class="text-[7.5px] font-bold text-white leading-tight">
+                        Digite <span class="bg-yellow-400 text-black font-black px-1 rounded">1</span> ou <span class="bg-cyan-400 text-black font-black px-1 rounded">2</span> no chat para entrar no time (ou use os ícones de cada coluna abaixo!):
+                    </div>
+                </div>
+
+                <!-- 2 COLUNAS VISUAIS COM ÍCONES GRANDES (HUMANO ENTENDE, ROBÔ NÃO LÊ TEXTO DE GIFT) -->
+                <div class="grid grid-cols-2 gap-1.5 text-[8px]">
+                    <!-- COLUNA TIME 1 -->
+                    <div id="footerCard0" class="bg-gradient-to-b from-red-950/90 to-black rounded-lg p-1.5 border border-red-500/70">
+                        <div class="flex items-center justify-between border-b border-red-500/40 pb-0.5 mb-0.5">
+                            <div class="flex items-center gap-1 min-w-0">
+                                <div id="footerTeam0Badge" class="w-4 h-4 shrink-0"></div>
+                                <span id="footerTitle0" class="font-black text-yellow-300 uppercase truncate text-[8px]">FLAMENGO</span>
+                            </div>
+                            <span class="bg-yellow-400 text-black font-black px-1 rounded text-[7px] shrink-0">TIME 1</span>
+                        </div>
+                        <div class="space-y-0.5 leading-tight text-[7.5px]">
+                            <div class="flex justify-between items-center"><span>💬 Chat <b>"1"</b>:</span><span class="text-emerald-300 font-bold">Chute + Barreira</span></div>
+                            <div class="flex justify-between items-center"><span>🌹 <b>Combo 1</b>:</span><span class="text-yellow-300 font-bold">⚡ Chute VIP +3 Gols</span></div>
+                            <div class="flex justify-between items-center"><span>🍺 / 🫶 <b>Combo 2</b>:</span><span class="text-purple-300 font-bold">📺 Chamar VAR (-5)</span></div>
+                            <div class="flex justify-between items-center"><span>🚀 / 🦁 <b>Ultra</b>:</span><span class="text-orange-400 font-black">🔥 PODER +25 GOLS</span></div>
+                        </div>
+                    </div>
+
+                    <!-- COLUNA TIME 2 -->
+                    <div id="footerCard1" class="bg-gradient-to-b from-blue-950/90 to-black rounded-lg p-1.5 border border-blue-500/70">
+                        <div class="flex items-center justify-between border-b border-blue-500/40 pb-0.5 mb-0.5">
+                            <div class="flex items-center gap-1 min-w-0">
+                                <div id="footerTeam1Badge" class="w-4 h-4 shrink-0"></div>
+                                <span id="footerTitle1" class="font-black text-cyan-300 uppercase truncate text-[8px]">CORINTHIANS</span>
+                            </div>
+                            <span class="bg-cyan-400 text-black font-black px-1 rounded text-[7px] shrink-0">TIME 2</span>
+                        </div>
+                        <div class="space-y-0.5 leading-tight text-[7.5px]">
+                            <div class="flex justify-between items-center"><span>💬 Chat <b>"2"</b>:</span><span class="text-emerald-300 font-bold">Chute + Barreira</span></div>
+                            <div class="flex justify-between items-center"><span>☕ / ⚡ <b>Combo 1</b>:</span><span class="text-cyan-300 font-bold">⚡ Chute VIP +3 Gols</span></div>
+                            <div class="flex justify-between items-center"><span>😎 / 👑 <b>Combo 2</b>:</span><span class="text-purple-300 font-bold">📺 Chamar VAR (-5)</span></div>
+                            <div class="flex justify-between items-center"><span>🌌 / 🏆 <b>Ultra</b>:</span><span class="text-yellow-300 font-black">⚡ PODER +25 GOLS</span></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FAIXA DOURADA ANIMADA 100% SEGURA (SEM PALAVRAS DE DOAÇÃO/MOEDA) -->
+                <div class="mt-1 bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-400 text-black font-black text-[8.5px] py-0.5 rounded uppercase tracking-wider ticker-wrap border border-yellow-600/40">
+                    <div class="ticker-move">
+                        <span class="mx-6">🏆 BOLA DE OURO DA ARENA: O TORCEDOR MAIS ATIVO DA PARTIDA FICA COM A FOTO NO TRONO! • 💬 DIGITE 1 OU 2 NO CHAT PARA ENTRAR NA FILA DE PÊNALTI E FORMAR A BARREIRA DO SEU TIME! • 🏃 NOVOS TORCEDORES INVADEM O GRAMADO CORRENDO (+2 GOLS)!</span>
+                        <span class="mx-6">🏆 BOLA DE OURO DA ARENA: O TORCEDOR MAIS ATIVO DA PARTIDA FICA COM A FOTO NO TRONO! • 💬 DIGITE 1 OU 2 NO CHAT PARA ENTRAR NA FILA DE PÊNALTI E FORMAR A BARREIRA DO SEU TIME! • 🏃 NOVOS TORCEDORES INVADEM O GRAMADO CORRENDO (+2 GOLS)!</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================
+         PAINEL DE CONTROLE NO PC
+         ========================================================== -->
+    <div id="controlPanel" class="w-full max-w-2xl bg-gray-900 border border-gray-800 rounded-2xl p-5 shadow-2xl flex flex-col gap-3.5">
+        
+        <div class="flex flex-wrap items-center justify-between gap-2 border-b border-gray-800 pb-2.5">
+            <div>
+                <h1 class="text-lg font-black text-white flex items-center gap-2">
+                    ⚽ Pixel Penalty Showdown + VAR
+                    <span id="connectionStatusBadge" class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full uppercase">
+                        🛡️ Blindagem Anti-OCR Ativa
+                    </span>
+                </h1>
+                <p class="text-xs text-emerald-400 font-bold">🛡️ Sem palavras "Presente/Doar/Moeda" na tela • Anti-Freeze 60 FPS • Bypass Euler v2.5</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button id="crowdToggleBtn" onclick="toggleCrowdAmbience()" class="bg-amber-900/60 hover:bg-amber-800 text-amber-200 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-amber-500/40">
+                    🏟️ Torcida: ON
+                </button>
+                <button id="musicToggleBtn" onclick="toggleBackgroundMusic()" class="bg-pink-900/60 hover:bg-pink-800 text-pink-200 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-pink-500/40">
+                    🎵 Música: ON
+                </button>
+                <button id="soundToggleBtn" onclick="toggleAudio()" class="bg-emerald-900/60 hover:bg-emerald-800 text-emerald-200 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-emerald-500/40">
+                    🔊 Efeitos: ON
+                </button>
+                <button id="voiceToggleBtn" onclick="toggleVoice()" class="bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 text-[11px] font-bold px-2.5 py-1.5 rounded-lg border border-indigo-500/40">
+                    🗣️ Narrador: ON
+                </button>
+                <button onclick="openSetupModal()" class="bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-black px-3 py-1.5 rounded-lg shadow">
+                    🔌 server.js
+                </button>
+            </div>
+        </div>
+
+        <!-- SELETOR DE CONFRONTO -->
+        <div class="bg-gray-950 border border-yellow-500/40 rounded-xl p-3 space-y-2">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-xs font-black uppercase text-yellow-400">🏆 Escolher Confronto (Vale BR x BR, EU x EU ou BR x EU!):</span>
+                <button onclick="broadcastAndRun('start_voting', {})" class="bg-amber-500 hover:bg-amber-400 text-black font-black text-xs px-3 py-1 rounded-lg shadow uppercase">
+                    🗳️ Abrir Votação Geral (60s)
+                </button>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 items-center">
+                <select id="selectTeam0" class="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white"></select>
+                <select id="selectTeam1" class="bg-gray-900 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-white"></select>
+                <button onclick="applySelectedMatchup()" class="bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs py-1.5 px-3 rounded-lg uppercase shadow">
+                    ⚽ Colocar em Campo
+                </button>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 pt-1 border-t border-gray-800">
+                <span class="text-[10px] font-bold text-gray-400 uppercase mr-1">🔥 Clássicos Rápidos:</span>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'B1', code1: 'B2' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🇧🇷 FLA x COR</button>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'B2', code1: 'B3' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🇧🇷 COR x PAL</button>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'B1', code1: 'B5' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🇧🇷 FLA x VAS</button>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'B3', code1: 'B4' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🇧🇷 PAL x SAO</button>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'E1', code1: 'E2' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🇪🇺 REAL x BARÇA</button>
+                <button onclick="broadcastAndRun('set_matchup', { code0: 'B1', code1: 'E1' })" class="bg-gray-800 hover:bg-gray-700 text-[10px] font-bold text-white px-2 py-1 rounded border border-white/10">🌎 FLA x REAL</button>
+            </div>
+        </div>
+
+        <!-- LINK LIMPO + CONEXÃO TIKTOK -->
+        <div class="bg-indigo-950/60 border border-indigo-500/50 rounded-xl p-2.5 flex flex-col gap-2">
+            <div class="flex items-center gap-2">
+                <input id="obsUrlInput" type="text" readonly class="w-full bg-gray-950 border border-indigo-500/40 rounded-lg px-3 py-1.5 text-xs text-indigo-200 font-mono" value="Carregando...">
+                <button onclick="copyObsLink()" class="shrink-0 bg-indigo-500 hover:bg-indigo-400 text-white font-black text-xs px-3 py-1.5 rounded-lg uppercase">📋 Copiar Link</button>
+                <button onclick="toggleObsMode()" class="shrink-0 bg-gray-800 hover:bg-gray-700 text-gray-200 font-bold text-xs px-3 py-1.5 rounded-lg">👁️ Tela Cheia</button>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-[11px] font-bold text-gray-300 shrink-0">Seu @ do TikTok:</span>
+                <input id="tiktokUsernameInput" type="text" placeholder="@seu_usuario_tiktok (precisa estar AO VIVO)" class="w-full bg-gray-950 border border-gray-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:border-emerald-500 focus:outline-none">
+                <button onclick="connectToTikTokLive()" class="shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3 py-1.5 rounded-lg">Conectar Live</button>
+                <button id="chaosBotBtn" onclick="toggleChaosBot()" class="shrink-0 bg-amber-500 hover:bg-amber-400 text-black font-black text-xs px-3 py-1.5 rounded-lg uppercase">🔥 Simulador</button>
+            </div>
+            <div class="bg-black/90 border border-gray-800 rounded-lg p-1.5">
+                <div class="flex justify-between items-center text-[10px] font-black uppercase mb-0.5">
+                    <span id="pcTikTokDetailedStatus" class="text-amber-400">📡 Status TikTok: Aguardando conexão</span>
+                    <span class="text-gray-500 font-mono" id="realEventsCounter">0 eventos reais</span>
+                </div>
+                <div id="pcLiveLogBox" class="text-[10px] font-mono text-gray-300 h-12 overflow-y-auto space-y-0.5 bg-gray-950/80 p-1 rounded">
+                    <div class="text-emerald-400">🛡️ Blindagem Anti-OCR Ativada: Nenhuma palavra de "Presente/Doar/Moeda" aparece na tela da live!</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2 COLUNAS DE DISPARO DE TESTE (TIME 1 vs TIME 2) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="bg-gray-950 border border-red-500/40 rounded-xl p-2.5 space-y-1.5">
+                <div class="text-xs font-black uppercase text-red-400 border-b border-gray-800 pb-1 flex justify-between">
+                    <span id="panelTeam0Title">⚽ TIME 1 (ESQUERDA)</span>
+                    <span class="text-[10px] bg-red-600 text-white px-1.5 rounded">DIGITE 1</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button onclick="broadcastAndRun('vote', { side: 0, tier: 'comment', user: createSimulatedUser(0) })" class="bg-gray-800 hover:bg-gray-700 text-white text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        💬 Chat "1" (Fila/Barreira)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 0, tier: 'rose', giftName: '🌹 Combo VIP', user: createSimulatedUser(0) })" class="bg-pink-950/80 hover:bg-pink-900 border border-pink-500/40 text-pink-200 text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        🌹 Combo 1 (Chute VIP +3)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 0, tier: 'var', giftName: '🍺 VAR Especial', user: createSimulatedUser(0) })" class="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-200 text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        📺 Chamar VAR (-5 Rival)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 0, tier: 'super', giftName: '🚀 Super Chute', user: createSimulatedUser(0) })" class="bg-gradient-to-r from-red-600 to-amber-500 text-white text-[11px] font-black py-1.5 px-2 rounded-lg shadow">
+                        🔥 PODERZÃO (+25 Gols)
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-gray-950 border border-blue-500/40 rounded-xl p-2.5 space-y-1.5">
+                <div class="text-xs font-black uppercase text-sky-400 border-b border-gray-800 pb-1 flex justify-between">
+                    <span id="panelTeam1Title">⚽ TIME 2 (DIREITA)</span>
+                    <span class="text-[10px] bg-blue-600 text-white px-1.5 rounded">DIGITE 2</span>
+                </div>
+                <div class="grid grid-cols-2 gap-1.5">
+                    <button onclick="broadcastAndRun('vote', { side: 1, tier: 'comment', user: createSimulatedUser(1) })" class="bg-gray-800 hover:bg-gray-700 text-white text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        💬 Chat "2" (Fila/Barreira)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 1, tier: 'rose', giftName: '☕ Combo VIP', user: createSimulatedUser(1) })" class="bg-pink-950/80 hover:bg-pink-900 border border-pink-500/40 text-pink-200 text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        ☕ Combo 1 (Chute VIP +3)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 1, tier: 'var', giftName: '😎 VAR Especial', user: createSimulatedUser(1) })" class="bg-purple-950/80 hover:bg-purple-900 border border-purple-500/50 text-purple-200 text-[11px] font-bold py-1.5 px-2 rounded-lg">
+                        📺 Chamar VAR (-5 Rival)
+                    </button>
+                    <button onclick="broadcastAndRun('vote', { side: 1, tier: 'super', giftName: '🌌 Super Chute', user: createSimulatedUser(1) })" class="bg-gradient-to-r from-blue-600 to-cyan-400 text-black text-[11px] font-black py-1.5 px-2 rounded-lg shadow">
+                        🔥 PODERZÃO (+25 GOLS)
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-gray-950 p-2.5 rounded-xl border border-gray-800">
+            <div class="flex flex-wrap items-center gap-1.5">
+                <button onclick="broadcastAndRun('follow', { side: 0, user: createSimulatedUser(0) })" class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-black px-2.5 py-1.5 rounded-lg shadow">
+                    🏃 Testar Invasor de Campo (Seguidor)
+                </button>
+                <button onclick="broadcastAndRun('like', { count: 120, user: createSimulatedUser(1) })" class="bg-pink-700 hover:bg-pink-600 text-white text-xs font-black px-2.5 py-1.5 rounded-lg shadow">
+                    ❤️ +120 Curtidas (Fura-Fila)
+                </button>
+                <button onclick="broadcastAndRun('reset', {})" class="bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-bold px-2.5 py-1.5 rounded-lg border border-gray-700">
+                    🔄 Zerar Placar
+                </button>
+            </div>
+            <div id="totalCoinsCounter" class="font-arcade text-sm text-yellow-400">🪙 0 Moedas (~R$ 0,00)</div>
+        </div>
+    </div>
+
+    <!-- MODAL COM O SERVER.JS -->
+    <div id="setupModal" class="fixed inset-0 z-50 hidden bg-black/85 backdrop-blur-sm items-center justify-center p-4">
+        <div class="bg-gray-900 border border-gray-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+            <div class="flex justify-between items-center border-b border-gray-800 pb-3">
+                <h2 class="text-base font-black text-white">🔌 Código do <code>server.js</code> (Com Bypass Anti-Erro EulerRoute v2.5)</h2>
+                <button onclick="closeSetupModal()" class="text-gray-400 hover:text-white text-sm font-bold px-2 py-1 rounded bg-gray-800">✕ Fechar</button>
+            </div>
+            <div class="bg-emerald-950/40 border border-emerald-500/40 rounded-xl p-3 space-y-2">
+                <div class="flex justify-between items-center">
+                    <span class="text-xs font-black text-emerald-300 uppercase">Substitua o seu server.js por este e reinicie o terminal:</span>
+                    <div class="flex gap-2">
+                        <button onclick="downloadServerFile()" class="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs px-3 py-1.5 rounded-lg">💾 Baixar server.js</button>
+                        <button onclick="copyServerCode()" class="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3 py-1.5 rounded-lg">📋 Copiar Código</button>
+                    </div>
+                </div>
+                <textarea id="serverJsCodeArea" readonly class="w-full h-56 bg-gray-950 border border-gray-800 rounded-lg p-3 font-mono text-[11px] text-gray-200 focus:outline-none"></textarea>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* =========================================================================
+           1. CATÁLOGO DOS 10 GIGANTES COM LOGOS SVG + UNIFORMES OFICIAIS DETALHADOS
+           ========================================================================= */
+        const ALL_CLUBS = [
+            {
+                code: 'B1', name: 'FLAMENGO', short: 'FLA', group: 'BR',
+                primary: '#dc2626', secondary: '#111827', accent: '#ffffff',
+                shorts: '#ffffff', socks: '#dc2626', kitPattern: 'hoops_red_black',
+                skin: '#d97706', hair: '#18181b',
+                keywords: ['FLA', 'MENGO', 'MENGAO', 'MENGÃO', 'B1']
+            },
+            {
+                code: 'B2', name: 'CORINTHIANS', short: 'COR', group: 'BR',
+                primary: '#ffffff', secondary: '#111827', accent: '#dc2626',
+                shorts: '#111827', socks: '#ffffff', kitPattern: 'pinstripes_white_black',
+                skin: '#b45309', hair: '#09090b',
+                keywords: ['COR', 'TIMAO', 'TIMÃO', 'B2']
+            },
+            {
+                code: 'B3', name: 'PALMEIRAS', short: 'PAL', group: 'BR',
+                primary: '#15803d', secondary: '#ffffff', accent: '#bbf7d0',
+                shorts: '#ffffff', socks: '#15803d', kitPattern: 'solid_green_white',
+                skin: '#f59e0b', hair: '#451a03',
+                keywords: ['PAL', 'VERDAO', 'VERDÃO', 'PORCO', 'B3']
+            },
+            {
+                code: 'B4', name: 'SÃO PAULO', short: 'SAO', group: 'BR',
+                primary: '#ffffff', secondary: '#dc2626', accent: '#111827',
+                shorts: '#ffffff', socks: '#111827', kitPattern: 'tricolor_chest_band',
+                skin: '#d97706', hair: '#18181b',
+                keywords: ['SAO', 'SÃO PAULO', 'SPFC', 'TRICOLOR', 'B4']
+            },
+            {
+                code: 'B5', name: 'VASCO', short: 'VAS', group: 'BR',
+                primary: '#111827', secondary: '#ffffff', accent: '#dc2626',
+                shorts: '#111827', socks: '#111827', kitPattern: 'sash_black_white',
+                skin: '#f59e0b', hair: '#27272a',
+                keywords: ['VAS', 'VASCO', 'GIGANTE', 'B5']
+            },
+            {
+                code: 'E1', name: 'REAL MADRID', short: 'RMA', group: 'EU',
+                primary: '#ffffff', secondary: '#facc15', accent: '#1d4ed8',
+                shorts: '#ffffff', socks: '#ffffff', kitPattern: 'real_white_gold',
+                skin: '#fde68a', hair: '#451a03',
+                keywords: ['REAL', 'MADRID', 'RMA', 'E1']
+            },
+            {
+                code: 'E2', name: 'BARCELONA', short: 'BAR', group: 'EU',
+                primary: '#1d4ed8', secondary: '#dc2626', accent: '#facc15',
+                shorts: '#1e3a8a', socks: '#1d4ed8', kitPattern: 'stripes_blaugrana',
+                skin: '#fcd34d', hair: '#1c1917',
+                keywords: ['BAR', 'BARCA', 'BARÇA', 'BARCELONA', 'E2']
+            },
+            {
+                code: 'E3', name: 'MAN. CITY', short: 'MCI', group: 'EU',
+                primary: '#38bdf8', secondary: '#ffffff', accent: '#0284c7',
+                shorts: '#ffffff', socks: '#38bdf8', kitPattern: 'solid_sky_white',
+                skin: '#fef08a', hair: '#d97706',
+                keywords: ['CITY', 'MCI', 'MANCHESTER', 'E3']
+            },
+            {
+                code: 'E4', name: 'PSG', short: 'PSG', group: 'EU',
+                primary: '#1e3a8a', secondary: '#dc2626', accent: '#ffffff',
+                shorts: '#1e3a8a', socks: '#1e3a8a', kitPattern: 'psg_center_stripe',
+                skin: '#b45309', hair: '#09090b',
+                keywords: ['PSG', 'PARIS', 'E4']
+            },
+            {
+                code: 'E5', name: 'BAYERN', short: 'BAY', group: 'EU',
+                primary: '#dc2626', secondary: '#ffffff', accent: '#3b82f6',
+                shorts: '#dc2626', socks: '#dc2626', kitPattern: 'bayern_red_white',
+                skin: '#fde68a', hair: '#78350f',
+                keywords: ['BAY', 'BAYERN', 'E5']
+            }
+        ];
+
+        function getClubLogoSVG(club, sizeClass = 'w-full h-full') {
+            const c = club.code;
+            if (c === 'B1') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <path d="M4,4 L32,4 L32,20 C32,29 18,34 18,34 C18,34 4,29 4,20 Z" fill="#111827" stroke="#ffffff" stroke-width="1.5"/>
+                    <path d="M5,8 L31,8 L31,13 L5,13 Z M5,18 L31,18 L31,23 L5,23 Z M9,28 L27,28 L18,33 Z" fill="#dc2626"/>
+                    <rect x="4" y="4" width="13" height="11" fill="#dc2626"/>
+                    <text x="10.5" y="12.5" font-size="7" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="Arial">CRF</text>
+                </svg>`;
+            }
+            if (c === 'B2') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <circle cx="18" cy="18" r="15" fill="#111827" stroke="#dc2626" stroke-width="2.2"/>
+                    <circle cx="18" cy="18" r="10.5" fill="#ffffff" stroke="#111827" stroke-width="1.5"/>
+                    <path d="M10,10 L26,26 M26,10 L10,26" stroke="#dc2626" stroke-width="2"/>
+                    <circle cx="18" cy="18" r="7" fill="#ffffff"/>
+                    <text x="18" y="20.5" font-size="7" font-weight="900" fill="#111827" text-anchor="middle" font-family="Arial">SCCP</text>
+                </svg>`;
+            }
+            if (c === 'B3') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <circle cx="18" cy="18" r="15" fill="#15803d" stroke="#ffffff" stroke-width="2.2"/>
+                    <circle cx="18" cy="18" r="11" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-dasharray="3,2"/>
+                    <text x="18" y="23" font-size="14" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="Arial">P</text>
+                </svg>`;
+            }
+            if (c === 'B4') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <polygon points="4,4 32,4 32,16 18,34 4,16" fill="#ffffff" stroke="#111827" stroke-width="1.8"/>
+                    <rect x="6" y="6" width="24" height="7" fill="#111827"/>
+                    <text x="18" y="11.5" font-size="6.5" font-weight="900" fill="#ffffff" text-anchor="middle" font-family="Arial">SPFC</text>
+                    <polygon points="6,15 16,15 16,29" fill="#dc2626"/>
+                    <polygon points="20,15 30,15 20,29" fill="#111827"/>
+                </svg>`;
+            }
+            if (c === 'B5') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <path d="M5,4 L31,4 L31,20 C31,29 18,34 18,34 C18,34 5,29 5,20 Z" fill="#111827" stroke="#ffffff" stroke-width="1.8"/>
+                    <polygon points="7,25 26,6 30,10 11,29" fill="#ffffff"/>
+                    <path d="M15,13 L21,13 L19,18 L21,23 L15,23 L17,18 Z M13,15 L13,21 L23,21 L23,15 Z" fill="#dc2626"/>
+                </svg>`;
+            }
+            if (c === 'E1') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <polygon points="11,6 14,2 18,5 22,2 25,6" fill="#facc15" stroke="#dc2626" stroke-width="0.8"/>
+                    <circle cx="18" cy="20" r="13" fill="#ffffff" stroke="#facc15" stroke-width="2.5"/>
+                    <line x1="9" y1="12" x2="27" y2="28" stroke="#1d4ed8" stroke-width="4"/>
+                    <text x="18" y="23.5" font-size="9" font-weight="900" fill="#ca8a04" text-anchor="middle" font-family="Arial">RM</text>
+                </svg>`;
+            }
+            if (c === 'E2') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <path d="M4,5 L32,5 L32,19 C32,28 18,34 18,34 C18,34 4,28 4,19 Z" fill="#1d4ed8" stroke="#facc15" stroke-width="2"/>
+                    <rect x="6" y="6" width="12" height="9" fill="#ffffff"/>
+                    <path d="M12,6 L12,15 M6,10.5 L18,10.5" stroke="#dc2626" stroke-width="2.2"/>
+                    <rect x="18" y="6" width="12" height="9" fill="#facc15"/>
+                    <path d="M21,6 L21,15 M25,6 L25,15 M29,6 L29,15" stroke="#dc2626" stroke-width="1.5"/>
+                    <rect x="10" y="17" width="4" height="13" fill="#dc2626"/>
+                    <rect x="18" y="17" width="4" height="14" fill="#dc2626"/>
+                    <rect x="25" y="17" width="3" height="11" fill="#dc2626"/>
+                </svg>`;
+            }
+            if (c === 'E3') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <circle cx="18" cy="18" r="15" fill="#38bdf8" stroke="#ffffff" stroke-width="2.2"/>
+                    <circle cx="18" cy="18" r="10" fill="#ffffff" stroke="#0284c7" stroke-width="1.5"/>
+                    <path d="M12,15 L24,15 L22,25 L18,28 L14,25 Z" fill="#38bdf8"/>
+                    <text x="18" y="13" font-size="5" font-weight="900" fill="#0284c7" text-anchor="middle" font-family="Arial">CITY</text>
+                </svg>`;
+            }
+            if (c === 'E4') {
+                return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                    <circle cx="18" cy="18" r="15" fill="#1e3a8a" stroke="#ffffff" stroke-width="2"/>
+                    <circle cx="18" cy="18" r="11" fill="#1e3a8a" stroke="#dc2626" stroke-width="1.5"/>
+                    <polygon points="18,8 12,26 15,26 18,16 21,26 24,26" fill="#dc2626" stroke="#ffffff" stroke-width="0.8"/>
+                </svg>`;
+            }
+            return `<svg viewBox="0 0 36 36" class="${sizeClass}">
+                <circle cx="18" cy="18" r="15" fill="#dc2626" stroke="#ffffff" stroke-width="2"/>
+                <circle cx="18" cy="18" r="9.5" fill="#2563eb" stroke="#ffffff" stroke-width="1.5"/>
+                <polygon points="18,9 23,18 18,27 13,18" fill="#ffffff"/>
+                <polygon points="10,18 18,13 26,18 18,23" fill="#3b82f6" opacity="0.85"/>
+            </svg>`;
+        }
+
+        const FAKE_VOTERS = [
+            "Camisa10_Pixel", "Artilheiro_BR", "GoleiroParedao", "ChuteDeFogo99", "ReiDaCobranca",
+            "TorcedorMaluco", "VarSincero", "MaracanaLotado", "ChampionsLeagueBR", "CanhotinhaDeOuro",
+            "GolaçoNoAngulo", "FielTorcida", "NacaoRubroNegra", "PorcoVerde", "Madridista_BR"
+        ];
+
+        const avatarImageCache = {};
+        function getCachedAvatarImage(url) {
+            if (!url) return null;
+            if (!avatarImageCache[url]) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.src = url;
+                avatarImageCache[url] = img;
+            }
+            return avatarImageCache[url];
+        }
+
+        function createSimulatedUser(side = 0) {
+            const raw = FAKE_VOTERS[Math.floor(Math.random() * FAKE_VOTERS.length)];
+            const avatarUrl = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(raw)}&backgroundColor=b6e3f4,c0aede,d1d4f9,ffd5dc,ffdfbf`;
+            getCachedAvatarImage(avatarUrl);
+            return {
+                uniqueId: raw,
+                username: '@' + raw,
+                initials: raw.substring(0, 2).toUpperCase(),
+                avatarUrl
+            };
+        }
+
+        /* =========================================================================
+           2. ESTADO CENTRAL DO JOGO + SISTEMA DA BOLA DE OURO (USANDO XP SEGURO)
+           ========================================================================= */
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let state = {
+            phase: 'match',
+            preVoteTime: 60,
+            preVotes: { B1: 15, B2: 14, B3: 11, B4: 8, B5: 7, E1: 12, E2: 10, E3: 7, E4: 5, E5: 6 },
+            matchTeams: [ALL_CLUBS[0], ALL_CLUBS[1]],
+            scores: [0, 0],
+            timeRemaining: 300,
+            isEnded: false,
+            endCountdown: 10,
+            totalCoins: 0,
+            likesCurrent: 0,
+            likesGoal: 1000,
+            userLikesMap: {},
+            furyMultiplier: 1,
+            furyTimer: 0,
+            screenShake: 0,
+            flashAlpha: 0,
+            flashColor: '#ffffff',
+
+            shooterQueue: [],
+            wallDefenders: [
+                { side: 1, username: '@Zagueiro1', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Def1' },
+                { side: 1, username: '@Zagueiro2', avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Def2' }
+            ],
+            keeperGloveCharges: [0, 0],
+            streakers: [],
+            activeShot: null,
+            varEvent: null
+        };
+
+        let ballonDorMap = {};
+        let currentBallonDorKingId = null;
+
+        function sanitizeActionLabelForOcr(rawLabel = '', side = 0) {
+            const clean = String(rawLabel)
+                .replace(/presente|doou|doar|moedas|moeda|gift/gi, 'Combo')
+                .trim();
+            return clean || `💬 Time ${side + 1}`;
+        }
+
+        function addBallonDorPoints(user, side, pts, actionLabel) {
+            if (!user) return;
+            const id = (user.uniqueId || user.username || 'torcedor').replace(/^@/, '');
+            const safeLabel = sanitizeActionLabelForOcr(actionLabel, side);
+            if (!ballonDorMap[id]) {
+                ballonDorMap[id] = {
+                    uniqueId: id,
+                    username: user.username || ('@' + id),
+                    avatarUrl: user.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(id)}`,
+                    side: side === 1 ? 1 : 0,
+                    points: 0,
+                    lastAction: safeLabel
+                };
+            }
+            ballonDorMap[id].points += pts;
+            ballonDorMap[id].side = side === 1 ? 1 : 0;
+            ballonDorMap[id].lastAction = safeLabel;
+            if (user.avatarUrl) ballonDorMap[id].avatarUrl = user.avatarUrl;
+
+            const sorted = Object.values(ballonDorMap).sort((a, b) => b.points - a.points);
+            if (sorted.length === 0) return;
+
+            const leader = sorted[0];
+            const runnerUp = sorted[1] || null;
+            const teamClub = state.matchTeams[leader.side] || state.matchTeams[0];
+
+            document.getElementById('ballonDorAvatar').src = leader.avatarUrl;
+            document.getElementById('ballonDorName').innerText = `${leader.username} (${leader.lastAction})`;
+            document.getElementById('ballonDorPoints').innerText = `${leader.points} XP`;
+            document.getElementById('ballonDorTeamTag').innerText = `CRAQUE ${teamClub.short}`;
+
+            if (runnerUp) {
+                const diff = Math.max(1, leader.points - runnerUp.points + 1);
+                document.getElementById('ballonDorRunnerUp').innerText = `🥈 2º: ${runnerUp.username} (${runnerUp.points} XP)`;
+                document.getElementById('ballonDorChaseHint').innerText = `DIFERENÇA: +${diff} XP!`;
+            } else {
+                document.getElementById('ballonDorRunnerUp').innerText = `🥈 2º: Participe p/ subir no ranking!`;
+                document.getElementById('ballonDorChaseHint').innerText = `LÍDER DA PARTIDA!`;
+            }
+
+            if (currentBallonDorKingId && currentBallonDorKingId !== leader.uniqueId && leader.points >= 15) {
+                currentBallonDorKingId = leader.uniqueId;
+                const overlay = document.getElementById('ballonDorCeremonyOverlay');
+                document.getElementById('ceremonyBallonAvatar').src = leader.avatarUrl;
+                document.getElementById('ceremonyBallonName').innerText = leader.username;
+                document.getElementById('ceremonyBallonPts').innerText = `Assumiu a Bola de Ouro com ${leader.points} XP!`;
+                overlay.classList.remove('hidden');
+                setTimeout(() => overlay.classList.add('hidden'), 3200);
+            } else if (!currentBallonDorKingId) {
+                currentBallonDorKingId = leader.uniqueId;
+            }
+        }
+
+        let particles = [];
+        let floatingTexts = [];
+        let frameCount = 0;
+
+        /* =========================================================================
+           3. MOTOR DE ÁUDIO DE ESTÁDIO AO VIVO
+           ========================================================================= */
+        let audioCtx = null;
+        let soundEnabled = true;
+        let voiceEnabled = true;
+        let crowdEnabled = true;
+        let musicEnabled = true;
+        let stadiumAudioStarted = false;
+
+        let crowdNoiseNode = null;
+        let crowdFilterNode = null;
+        let crowdGainNode = null;
+        let musicSequencerInterval = null;
+        let musicStep = 0;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function activateAllStadiumAudio() {
+            initAudio();
+            startStadiumCrowdLoop();
+            startStadiumMusicSequencer();
+            stadiumAudioStarted = true;
+            const banner = document.getElementById('audioUnlockBanner');
+            if (banner) banner.classList.add('hidden');
+            playCrowdGoalRoar(1.2);
+            showToast('🏟️ Torcida do Estádio + Música Envolvente Ativadas!');
+        }
+
+        function tryAutoUnlockAudio() {
+            if (!stadiumAudioStarted) {
+                activateAllStadiumAudio();
+            }
+        }
+
+        function startStadiumCrowdLoop() {
+            if (!audioCtx || crowdNoiseNode) return;
+            try {
+                const bufferSize = audioCtx.sampleRate * 3;
+                const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+                for (let i = 0; i < bufferSize; i++) {
+                    const white = Math.random() * 2 - 1;
+                    b0 = 0.99886 * b0 + white * 0.0555179;
+                    b1 = 0.99332 * b1 + white * 0.0750759;
+                    b2 = 0.96900 * b2 + white * 0.1538520;
+                    b3 = 0.86650 * b3 + white * 0.3104856;
+                    b4 = 0.55000 * b4 + white * 0.5329522;
+                    b5 = -0.7616 * b5 - white * 0.0168980;
+                    output[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.04;
+                    b6 = white * 0.115926;
+                }
+
+                crowdNoiseNode = audioCtx.createBufferSource();
+                crowdNoiseNode.buffer = noiseBuffer;
+                crowdNoiseNode.loop = true;
+
+                crowdFilterNode = audioCtx.createBiquadFilter();
+                crowdFilterNode.type = 'bandpass';
+                crowdFilterNode.frequency.setValueAtTime(620, audioCtx.currentTime);
+                crowdFilterNode.Q.setValueAtTime(1.4, audioCtx.currentTime);
+
+                crowdGainNode = audioCtx.createGain();
+                crowdGainNode.gain.setValueAtTime(crowdEnabled ? 0.14 : 0.0001, audioCtx.currentTime);
+
+                crowdNoiseNode.connect(crowdFilterNode);
+                crowdFilterNode.connect(crowdGainNode);
+                crowdGainNode.connect(audioCtx.destination);
+                crowdNoiseNode.start(0);
+            } catch (e) {}
+        }
+
+        function playCrowdGoalRoar(intensity = 1.6) {
+            if (!crowdEnabled || !audioCtx) return;
+            try {
+                initAudio();
+                if (!crowdNoiseNode) startStadiumCrowdLoop();
+                const now = audioCtx.currentTime;
+                if (crowdGainNode && crowdFilterNode) {
+                    crowdGainNode.gain.cancelScheduledValues(now);
+                    crowdGainNode.gain.setValueAtTime(0.16, now);
+                    crowdGainNode.gain.linearRampToValueAtTime(0.46 * intensity, now + 0.15);
+                    crowdGainNode.gain.exponentialRampToValueAtTime(0.14, now + 2.1);
+
+                    crowdFilterNode.frequency.cancelScheduledValues(now);
+                    crowdFilterNode.frequency.setValueAtTime(650, now);
+                    crowdFilterNode.frequency.linearRampToValueAtTime(1150, now + 0.25);
+                    crowdFilterNode.frequency.exponentialRampToValueAtTime(620, now + 2.1);
+                }
+            } catch (e) {}
+        }
+
+        function startStadiumMusicSequencer() {
+            if (musicSequencerInterval) return;
+
+            const bassNotes = [
+                130.81, 0, 130.81, 146.83, 164.81, 0, 196.00, 164.81,
+                174.61, 0, 174.61, 196.00, 146.83, 0, 196.00, 146.83
+            ];
+            const leadNotes = [
+                523.25, 0, 659.25, 587.33, 523.25, 659.25, 783.99, 0,
+                698.46, 659.25, 587.33, 523.25, 587.33, 659.25, 523.25, 0
+            ];
+
+            musicSequencerInterval = setInterval(() => {
+                if (!audioCtx || audioCtx.state !== 'running') return;
+                const now = audioCtx.currentTime;
+                const step = musicStep % 16;
+                musicStep++;
+
+                if (crowdEnabled && crowdFilterNode && step % 4 === 0) {
+                    const chantFreq = step % 8 === 0 ? 740 : 560;
+                    crowdFilterNode.frequency.setTargetAtTime(chantFreq, now, 0.18);
+                }
+
+                if ((musicEnabled || crowdEnabled) && (step % 4 === 0 || step === 14)) {
+                    const kickOsc = audioCtx.createOscillator();
+                    const kickGain = audioCtx.createGain();
+                    kickOsc.type = 'sine';
+                    const isStrongBeat = step % 4 === 0;
+                    kickOsc.frequency.setValueAtTime(isStrongBeat ? 115 : 95, now);
+                    kickOsc.frequency.exponentialRampToValueAtTime(38, now + 0.14);
+                    kickGain.gain.setValueAtTime(musicEnabled ? 0.16 : 0.08, now);
+                    kickGain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+                    kickOsc.connect(kickGain);
+                    kickGain.connect(audioCtx.destination);
+                    kickOsc.start(now);
+                    kickOsc.stop(now + 0.15);
+                }
+
+                if (!musicEnabled) return;
+
+                if (step % 4 === 2 || step === 7 || step === 15) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(320, now);
+                    osc.frequency.exponentialRampToValueAtTime(120, now + 0.06);
+                    gain.gain.setValueAtTime(0.06, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.065);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now);
+                    osc.stop(now + 0.065);
+                }
+
+                const bFreq = bassNotes[step];
+                if (bFreq > 0) {
+                    const bOsc = audioCtx.createOscillator();
+                    const bGain = audioCtx.createGain();
+                    bOsc.type = 'sawtooth';
+                    const mult = state.furyTimer > 0 ? 1.122 : 1;
+                    bOsc.frequency.setValueAtTime(bFreq * mult, now);
+                    bGain.gain.setValueAtTime(0.055, now);
+                    bGain.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+                    bOsc.connect(bGain);
+                    bGain.connect(audioCtx.destination);
+                    bOsc.start(now);
+                    bOsc.stop(now + 0.16);
+                }
+
+                const lFreq = leadNotes[step];
+                if (lFreq > 0) {
+                    const lOsc = audioCtx.createOscillator();
+                    const lGain = audioCtx.createGain();
+                    lOsc.type = 'square';
+                    const mult = state.furyTimer > 0 ? 1.122 : 1;
+                    lOsc.frequency.setValueAtTime(lFreq * mult, now);
+                    lGain.gain.setValueAtTime(0.032, now);
+                    lGain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+                    lOsc.connect(lGain);
+                    lGain.connect(audioCtx.destination);
+                    lOsc.start(now);
+                    lOsc.stop(now + 0.17);
+                }
+            }, 195);
+        }
+
+        function toggleCrowdAmbience() {
+            activateAllStadiumAudio();
+            crowdEnabled = !crowdEnabled;
+            document.getElementById('crowdToggleBtn').innerText = crowdEnabled ? '🏟️ Torcida: ON' : '🏟️ Torcida: OFF';
+            if (crowdGainNode && audioCtx) {
+                crowdGainNode.gain.setTargetAtTime(crowdEnabled ? 0.14 : 0.0001, audioCtx.currentTime, 0.1);
+            }
+        }
+
+        function toggleBackgroundMusic() {
+            activateAllStadiumAudio();
+            musicEnabled = !musicEnabled;
+            document.getElementById('musicToggleBtn').innerText = musicEnabled ? '🎵 Música: ON' : '🎵 Música: OFF';
+        }
+
+        function toggleAudio() {
+            activateAllStadiumAudio();
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundToggleBtn').innerText = soundEnabled ? '🔊 Efeitos: ON' : '🔇 Efeitos: OFF';
+        }
+
+        function toggleVoice() {
+            voiceEnabled = !voiceEnabled;
+            document.getElementById('voiceToggleBtn').innerText = voiceEnabled ? '🗣️ Narrador: ON' : '🤐 Narrador: OFF';
+        }
+
+        function speakAnnouncement(text) {
+            if (!voiceEnabled || !('speechSynthesis' in window)) return;
+            try {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'pt-BR';
+                u.rate = 1.22;
+                u.pitch = 1.08;
+                window.speechSynthesis.speak(u);
+            } catch (e) {}
+        }
+
+        function playGoalChimeSound() {
+            playCrowdGoalRoar(1.7);
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50, 783.99, 1046.50];
+                notes.forEach((freq, idx) => {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+                    gain.gain.setValueAtTime(0.18, now + idx * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + (idx + 1) * 0.06);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + idx * 0.06);
+                    osc.stop(now + (idx + 1) * 0.06);
+                });
+            } catch (e) {}
+        }
+
+        function playKickSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(210, now);
+                osc.frequency.exponentialRampToValueAtTime(48, now + 0.09);
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.095);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start(now);
+                osc.stop(now + 0.095);
+            } catch (e) {}
+        }
+
+        function playWhistleSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                const now = audioCtx.currentTime;
+                for (let i = 0; i < 3; i++) {
+                    const osc = audioCtx.createOscillator();
+                    const gain = audioCtx.createGain();
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(2700, now + i * 0.08);
+                    osc.frequency.setValueAtTime(2900, now + i * 0.08 + 0.04);
+                    gain.gain.setValueAtTime(0.14, now + i * 0.08);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + i * 0.08 + 0.075);
+                    osc.connect(gain);
+                    gain.connect(audioCtx.destination);
+                    osc.start(now + i * 0.08);
+                    osc.stop(now + i * 0.08 + 0.075);
+                }
+            } catch (e) {}
+        }
+
+        /* =========================================================================
+           4. LÓGICA DE VOTAÇÃO GERAL (TOP 1 vs TOP 2)
+           ========================================================================= */
+        function populateClubSelectors() {
+            const s0 = document.getElementById('selectTeam0');
+            const s1 = document.getElementById('selectTeam1');
+            if (!s0 || !s1) return;
+            s0.innerHTML = '';
+            s1.innerHTML = '';
+            ALL_CLUBS.forEach((c, idx) => {
+                const flag = c.group === 'BR' ? '🇧🇷' : '🇪🇺';
+                s0.innerHTML += `<option value="${c.code}" ${idx === 0 ? 'selected' : ''}>${flag} ${c.code} - ${c.name}</option>`;
+                s1.innerHTML += `<option value="${c.code}" ${idx === 1 ? 'selected' : ''}>${flag} ${c.code} - ${c.name}</option>`;
+            });
+        }
+
+        function applySelectedMatchup() {
+            const code0 = document.getElementById('selectTeam0').value;
+            const code1 = document.getElementById('selectTeam1').value;
+            broadcastAndRun('set_matchup', { code0, code1 });
+        }
+
+        function setMatchTeamsByCode(code0, code1) {
+            const t0 = ALL_CLUBS.find(c => c.code === code0) || ALL_CLUBS[0];
+            let t1 = ALL_CLUBS.find(c => c.code === code1) || ALL_CLUBS[1];
+            if (t0.code === t1.code) {
+                t1 = ALL_CLUBS.find(c => c.code !== t0.code);
+            }
+            state.matchTeams = [t0, t1];
+            state.scores = [0, 0];
+            state.phase = 'match';
+            state.timeRemaining = 300;
+            state.isEnded = false;
+            document.getElementById('preMatchVotingOverlay').classList.add('hidden');
+            document.getElementById('preMatchVotingOverlay').classList.remove('flex');
+            document.getElementById('votingOverlay').classList.add('hidden');
+            document.getElementById('votingOverlay').classList.remove('flex');
+            document.getElementById('footerMainInstruction').innerHTML = `Digite <span class="bg-yellow-400 text-black font-black px-1 rounded">1</span> (${t0.short}) ou <span class="bg-cyan-400 text-black font-black px-1 rounded">2</span> (${t1.short}) no chat para entrar no time (ou use os ícones abaixo!):`;
+
+            const s0 = document.getElementById('selectTeam0');
+            const s1 = document.getElementById('selectTeam1');
+            if (s0) s0.value = t0.code;
+            if (s1) s1.value = t1.code;
+
+            if (socket && socket.connected) {
+                socket.emit('update_match_keywords', {
+                    side0: ['1', 'TIME 1', t0.name, t0.short, ...(t0.keywords || [])],
+                    side1: ['2', 'TIME 2', t1.name, t1.short, ...(t1.keywords || [])]
+                });
+            }
+
+            updateMatchupHud();
+            playWhistleSound();
+            playCrowdGoalRoar(1.4);
+            speakAnnouncement(`Confronto na tela! ${t0.name} contra ${t1.name}! Digitem 1 ou 2 no chat para bater o pênalti!`);
+        }
+
+        function startPreMatchVoting() {
+            state.phase = 'voting';
+            state.preVoteTime = 60;
+            ALL_CLUBS.forEach(c => { state.preVotes[c.code] = Math.floor(Math.random() * 6) + 2; });
+            const overlay = document.getElementById('preMatchVotingOverlay');
+            overlay.classList.remove('hidden');
+            overlay.classList.add('flex');
+            document.getElementById('votingOverlay').classList.add('hidden');
+            document.getElementById('votingOverlay').classList.remove('flex');
+            document.getElementById('phaseBadgeHud').innerText = '🗳️ VOTAÇÃO';
+            document.getElementById('footerMainInstruction').innerHTML = `🗳️ OS 2 MAIS VOTADOS SE ENFRENTAM! DIGITE <span class="text-emerald-300 font-black">B1 A B5</span> OU <span class="text-sky-300 font-black">E1 A E5</span>!`;
+            renderPreVoteLists();
+            playWhistleSound();
+            speakAnnouncement('Votação aberta! Os dois times mais votados no geral vão se enfrentar! Vale clássico brasileiro ou mundial!');
+        }
+
+        function getOverallSortedClubs() {
+            return [...ALL_CLUBS].sort((a, b) => (state.preVotes[b.code] || 0) - (state.preVotes[a.code] || 0));
+        }
+
+        function renderPreVoteLists() {
+            const brBox = document.getElementById('brazilVoteList');
+            const euBox = document.getElementById('europeVoteList');
+            if (!brBox || !euBox) return;
+
+            const overallSorted = getOverallSortedClubs();
+            const top1Club = overallSorted[0];
+            const top2Club = overallSorted[1];
+
+            const totalAllVotes = ALL_CLUBS.reduce((acc, c) => acc + (state.preVotes[c.code] || 0), 0) || 1;
+
+            document.getElementById('leader1Logo').innerHTML = getClubLogoSVG(top1Club);
+            document.getElementById('leader1Name').innerText = top1Club.name;
+            document.getElementById('leader1Votes').innerText = `${state.preVotes[top1Club.code] || 0} VOTOS (${Math.round(((state.preVotes[top1Club.code] || 0) / totalAllVotes) * 100)}%)`;
+
+            document.getElementById('leader2Logo').innerHTML = getClubLogoSVG(top2Club);
+            document.getElementById('leader2Name').innerText = top2Club.name;
+            document.getElementById('leader2Votes').innerText = `${state.preVotes[top2Club.code] || 0} VOTOS (${Math.round(((state.preVotes[top2Club.code] || 0) / totalAllVotes) * 100)}%)`;
+
+            const badge = document.getElementById('matchupTypeBadge');
+            if (top1Club.group === 'BR' && top2Club.group === 'BR') {
+                badge.innerText = '🇧🇷 SUPER CLÁSSICO BRASILEIRO!';
+                badge.className = 'text-[7px] font-black uppercase bg-emerald-400 text-black px-1.5 py-0.2 rounded';
+            } else if (top1Club.group === 'EU' && top2Club.group === 'EU') {
+                badge.innerText = '🇪🇺 CLÁSSICO CHAMPIONS LEAGUE!';
+                badge.className = 'text-[7px] font-black uppercase bg-sky-400 text-black px-1.5 py-0.2 rounded';
+            } else {
+                badge.innerText = '🌎 MUNDIAL BRASIL VS EUROPA!';
+                badge.className = 'text-[7px] font-black uppercase bg-yellow-400 text-black px-1.5 py-0.2 rounded';
+            }
+
+            const maxVote = Math.max(1, state.preVotes[top1Club.code] || 1);
+            const brClubs = ALL_CLUBS.filter(c => c.group === 'BR');
+            const euClubs = ALL_CLUBS.filter(c => c.group === 'EU');
+
+            const renderClubCard = (c, isBr) => {
+                const votes = state.preVotes[c.code] || 0;
+                const barWidth = Math.round((votes / maxVote) * 100);
+                const isFirst = c.code === top1Club.code;
+                const isSecond = c.code === top2Club.code;
+                const highlightBorder = isFirst
+                    ? 'border-yellow-400 ring-1 ring-yellow-400/70'
+                    : (isSecond ? 'border-sky-300 ring-1 ring-sky-300/60' : 'border-white/10');
+                const medal = isFirst ? '🥇1º' : (isSecond ? '🥈2º' : '');
+
+                return `
+                    <div class="relative overflow-hidden bg-black/85 px-1.5 py-1 rounded-lg border ${highlightBorder}">
+                        <div class="absolute inset-y-0 left-0 ${isBr ? 'bg-emerald-600/35' : 'bg-blue-600/35'} transition-all duration-300" style="width:${barWidth}%"></div>
+                        <div class="relative flex items-center justify-between gap-1">
+                            <div class="flex items-center gap-1 min-w-0">
+                                <span class="${isBr ? 'bg-emerald-500' : 'bg-sky-400'} text-black font-black text-[8px] px-1 rounded shrink-0">${c.code}</span>
+                                <div class="w-4 h-4 shrink-0">${getClubLogoSVG(c)}</div>
+                                <span class="font-black text-[8px] text-white truncate">${c.name}</span>
+                            </div>
+                            <div class="flex items-center gap-0.5 shrink-0">
+                                ${medal ? `<span class="text-[7px] font-black bg-yellow-400/20 text-yellow-300 px-1 rounded">${medal}</span>` : ''}
+                                <span class="font-arcade text-[9px] ${(isFirst || isSecond) ? 'text-yellow-300' : 'text-gray-300'}">${votes}</span>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            };
+
+            brBox.innerHTML = brClubs.map(c => renderClubCard(c, true)).join('');
+            euBox.innerHTML = euClubs.map(c => renderClubCard(c, false)).join('');
+        }
+
+        function finishPreMatchVotingAndStart() {
+            const overallSorted = getOverallSortedClubs();
+            setMatchTeamsByCode(overallSorted[0].code, overallSorted[1].code);
+        }
+
+        function updateMatchupHud() {
+            const t0 = state.matchTeams[0];
+            const t1 = state.matchTeams[1];
+
+            document.getElementById('team0NameHud').innerText = t0.name;
+            document.getElementById('team0LogoBox').innerHTML = getClubLogoSVG(t0);
+
+            document.getElementById('team1NameHud').innerText = t1.name;
+            document.getElementById('team1LogoBox').innerHTML = getClubLogoSVG(t1);
+
+            const fBadge0 = document.getElementById('footerTeam0Badge');
+            const fBadge1 = document.getElementById('footerTeam1Badge');
+            if (fBadge0) fBadge0.innerHTML = getClubLogoSVG(t0);
+            if (fBadge1) fBadge1.innerHTML = getClubLogoSVG(t1);
+
+            document.getElementById('footerTitle0').innerText = t0.name;
+            document.getElementById('footerTitle1').innerText = t1.name;
+            document.getElementById('panelTeam0Title').innerText = `⚽ 1 ${t0.name}`;
+            document.getElementById('panelTeam1Title').innerText = `⚽ 2 ${t1.name}`;
+            document.getElementById('phaseBadgeHud').innerText = `⚽ PÊNALTIS`;
+
+            updateScoresUI();
+        }
+
+        function updateScoresUI() {
+            document.getElementById('scoreTeam0').innerText = state.scores[0];
+            document.getElementById('scoreTeam1').innerText = state.scores[1];
+            const total = (state.scores[0] + state.scores[1]) || 1;
+            const pct0 = state.scores[0] === state.scores[1] ? 50 : Math.max(12, Math.min(88, (state.scores[0] / total) * 100));
+            const c0 = state.matchTeams[0].primary === '#ffffff' ? state.matchTeams[0].secondary : state.matchTeams[0].primary;
+            const c1 = state.matchTeams[1].primary === '#ffffff' ? state.matchTeams[1].secondary : state.matchTeams[1].primary;
+            document.getElementById('tugBar0').style.width = `${pct0}%`;
+            document.getElementById('tugBar0').style.background = c0;
+            document.getElementById('tugBar1').style.width = `${100 - pct0}%`;
+            document.getElementById('tugBar1').style.background = c1;
+        }
+
+        function renderShooterQueueHud() {
+            const box = document.getElementById('shootersQueueHud');
+            if (!box) return;
+            if (state.shooterQueue.length === 0) {
+                box.innerHTML = `<span class="text-[8.5px] text-gray-300 font-bold">Digite 1 (${state.matchTeams[0].short}) ou 2 (${state.matchTeams[1].short}) para chutar!</span>`;
+                return;
+            }
+            box.innerHTML = state.shooterQueue.slice(0, 5).map((item) => {
+                const badgeColor = item.side === 0 ? 'border-yellow-400 bg-red-950/90' : 'border-cyan-400 bg-blue-950/90';
+                const vipIcon = item.tier !== 'comment' || item.vipLike ? '👑 ' : '';
+                return `
+                    <div class="shrink-0 flex items-center gap-1 px-2 py-0.5 rounded-full border-2 ${badgeColor}">
+                        <img src="${item.user.avatarUrl}" class="w-4 h-4 rounded-full object-cover border border-white" onerror="this.src='https://placehold.co/32x32/111/fff?text=10'">
+                        <span class="text-[8.5px] font-black text-white max-w-[68px] truncate">${vipIcon}${item.user.username}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function triggerVoteEvent(side, tier, customUser = null, giftName = null, voteClubCode = null) {
+            const user = customUser || createSimulatedUser(side);
+            if (user.avatarUrl) getCachedAvatarImage(user.avatarUrl);
+
+            const s = (side === 1) ? 1 : 0;
+            const pts = tier === 'super' ? 250 : (tier === 'var' ? 150 : (tier === 'rose' ? 10 : 1));
+            const actionLabel = tier === 'super' ? '🔥 Poder Especial' : (tier === 'var' ? '📺 Chamou VAR' : (tier === 'rose' ? '⚡ Chute VIP' : `💬 Digitou ${s + 1}`));
+            addBallonDorPoints(user, s, pts, actionLabel);
+
+            if (state.phase === 'voting') {
+                const code = voteClubCode || (side === 0 ? 'B1' : 'B2');
+                const weight = tier === 'comment' ? 1 : 25;
+                state.preVotes[code] = (state.preVotes[code] || 0) + weight;
+                renderPreVoteLists();
+                return;
+            }
+
+            if (state.isEnded) return;
+            const rival = s === 0 ? 1 : 0;
+
+            if (tier === 'comment') {
+                const alreadyInWall = state.wallDefenders.findIndex(d => d.username === user.username);
+                if (alreadyInWall !== -1) state.wallDefenders.splice(alreadyInWall, 1);
+                state.wallDefenders.unshift({ side: s, username: user.username, avatarUrl: user.avatarUrl });
+                if (state.wallDefenders.length > 3) state.wallDefenders.pop();
+
+                state.shooterQueue.push({
+                    side: s,
+                    tier: 'comment',
+                    goals: 1,
+                    user,
+                    vipLike: false
+                });
+                renderShooterQueueHud();
+                return;
+            }
+
+            if (tier === 'rose') {
+                addCoins(1);
+                state.keeperGloveCharges[s] = Math.min(3, state.keeperGloveCharges[s] + 1);
+                state.shooterQueue.unshift({
+                    side: s,
+                    tier: 'rose',
+                    goals: 3,
+                    giftName: '⚡ Chute VIP',
+                    user,
+                    vipLike: true
+                });
+                renderShooterQueueHud();
+                spawnFloatingText(207, 295, `🧤 LUVA DE OURO + CHUTE VIP (${user.username})!`, '#f472b6', 13);
+                return;
+            }
+
+            if (tier === 'var' || tier === 'steal') {
+                addCoins(30);
+                triggerVarRefereeAnimation(s, rival, user, '📺 VAR Oficial');
+                return;
+            }
+
+            if (tier === 'super' || tier === 'whale') {
+                addCoins(300);
+                state.shooterQueue.unshift({
+                    side: s,
+                    tier: 'super',
+                    goals: 25,
+                    giftName: '🔥 SUPER PODER',
+                    user,
+                    vipLike: true
+                });
+                renderShooterQueueHud();
+                playCrowdGoalRoar(1.8);
+                speakAnnouncement(`Super Poder ativado por ${user.username.replace('@', '')}! Chute de fogo valendo vinte e cinco gols para o ${state.matchTeams[s].name}!`);
+            }
+        }
+
+        function triggerVarRefereeAnimation(callerSide, rivalSide, user, giftLabel) {
+            const annulled = Math.min(state.scores[rivalSide], 5 * state.furyMultiplier);
+            const bonus = 5 * state.furyMultiplier;
+            state.scores[rivalSide] = Math.max(0, state.scores[rivalSide] - annulled);
+            state.scores[callerSide] += bonus;
+            updateScoresUI();
+
+            state.varEvent = {
+                timer: 135,
+                callerSide,
+                rivalSide,
+                annulled,
+                bonus,
+                user,
+                giftLabel: '📺 Revisão Oficial'
+            };
+
+            state.screenShake = 18;
+            playWhistleSound();
+            playCrowdGoalRoar(1.5);
+            speakAnnouncement(`Atenção! ${user.username.replace('@', '')} chamou o VAR! Gol anulado do ${state.matchTeams[rivalSide].name}!`);
+        }
+
+        function triggerLikeEvent(likeCount = 20, customUser = null) {
+            const user = customUser || createSimulatedUser(0);
+            state.likesCurrent += likeCount;
+            state.userLikesMap[user.username] = (state.userLikesMap[user.username] || 0) + likeCount;
+            addBallonDorPoints(user, 0, Math.max(1, Math.floor(likeCount / 25)), '💗 Energia');
+
+            if (state.userLikesMap[user.username] >= 100) {
+                state.userLikesMap[user.username] = 0;
+                const existingIdx = state.shooterQueue.findIndex(q => q.user.username === user.username);
+                if (existingIdx > 0) {
+                    const [item] = state.shooterQueue.splice(existingIdx, 1);
+                    item.vipLike = true;
+                    item.goals = 2;
+                    state.shooterQueue.unshift(item);
+                } else {
+                    state.shooterQueue.unshift({
+                        side: Math.random() < 0.5 ? 0 : 1,
+                        tier: 'comment',
+                        goals: 2,
+                        user,
+                        vipLike: true
+                    });
+                }
+                renderShooterQueueHud();
+                spawnFloatingText(207, 465, `⚡ ENERGIA MÁXIMA! ${user.username} NA FRENTE!`, '#facc15', 13);
+            }
+
+            if (state.likesCurrent >= state.likesGoal) {
+                state.likesCurrent = 0;
+                state.likesGoal += 500;
+                state.furyMultiplier = 2;
+                state.furyTimer = 20;
+                state.screenShake = 15;
+                playWhistleSound();
+                playCrowdGoalRoar(1.8);
+                speakAnnouncement('Torcida em chamas! Todos os gols valem o dobro por vinte segundos!');
+            }
+            updateLikesUI();
+        }
+
+        function triggerFollowEvent(side = 0, customUser = null) {
+            const s = (side === 1) ? 1 : 0;
+            const user = customUser || createSimulatedUser(s);
+            if (user.avatarUrl) getCachedAvatarImage(user.avatarUrl);
+
+            const bonus = 2 * state.furyMultiplier;
+            state.scores[s] += bonus;
+            updateScoresUI();
+            addBallonDorPoints(user, s, 15, '🏃 Invadiu o Campo');
+
+            document.getElementById('lastFollowerAvatar').src = user.avatarUrl || 'https://placehold.co/32x32/083344/22d3ee?text=+';
+            document.getElementById('lastFollowerName').innerText = user.username;
+
+            state.streakers.push({
+                x: -40,
+                y: 392 + Math.random() * 28,
+                vx: 3.4,
+                user,
+                team: state.matchTeams[s],
+                bonus
+            });
+
+            playGoalChimeSound();
+            spawnFloatingText(207, 375, `🏃 INVASOR ${user.username} (+${bonus} GOLS)!`, '#22d3ee', 14);
+        }
+
+        function addCoins(c) {
+            state.totalCoins += c;
+            const brl = (state.totalCoins * 0.035).toFixed(2).replace('.', ',');
+            const el = document.getElementById('totalCoinsCounter');
+            if (el) el.innerText = `🪙 ${state.totalCoins} Moedas (~R$ ${brl})`;
+        }
+
+        function updateLikesUI() {
+            const pct = Math.min(100, ((state.likesCurrent / state.likesGoal) * 100)).toFixed(1);
+            document.getElementById('likeProgressBar').style.width = `${pct}%`;
+            document.getElementById('likeCounterHud').innerText = state.furyTimer > 0
+                ? `🔥 2X ATIVO (${state.furyTimer}s)`
+                : `${state.likesCurrent} / ${state.likesGoal}`;
+        }
+
+        /* =========================================================================
+           5. MOTOR PIXEL ART 16-BITS
+           ========================================================================= */
+        function processNextPenaltyShot() {
+            if (state.activeShot || state.varEvent || state.phase !== 'match' || state.isEnded) return;
+            if (state.shooterQueue.length === 0) return;
+
+            const nextShooter = state.shooterQueue.shift();
+            renderShooterQueueHud();
+
+            const attSide = nextShooter.side;
+            const defSide = attSide === 0 ? 1 : 0;
+            const mult = state.furyMultiplier || 1;
+
+            let outcome = 'goal';
+            if (nextShooter.tier === 'comment' && !nextShooter.vipLike) {
+                if (state.keeperGloveCharges[defSide] > 0) {
+                    state.keeperGloveCharges[defSide]--;
+                    outcome = 'saved_keeper';
+                } else if (Math.random() < 0.22) {
+                    outcome = Math.random() < 0.5 ? 'saved_keeper' : 'saved_wall';
+                }
+            }
+
+            const targetGoalX = 135 + Math.random() * 144;
+            const targetGoalY = 264 + Math.random() * 32;
+
+            state.activeShot = {
+                progress: 0,
+                speed: nextShooter.tier === 'super' ? 0.022 : 0.032,
+                shooter: nextShooter,
+                attTeam: state.matchTeams[attSide],
+                defTeam: state.matchTeams[defSide],
+                outcome,
+                goalsValue: nextShooter.goals * mult,
+                targetX: targetGoalX,
+                targetY: targetGoalY,
+                kickSoundPlayed: false,
+                resolved: false
+            };
+        }
+
+        function drawPixelArtPlayer(cx, cy, scale, team, pose = 'run', isSuperFire = false) {
+            ctx.save();
+            ctx.translate(cx, cy);
+            ctx.scale(scale, scale);
+
+            if (isSuperFire) {
+                ctx.fillStyle = frameCount % 4 < 2 ? '#facc15' : '#ef4444';
+                ctx.beginPath();
+                ctx.arc(0, -10, 26, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            const p = 2.6;
+            const drawPx = (gx, gy, w, h, color) => {
+                ctx.fillStyle = color;
+                ctx.fillRect(gx * p, gy * p, w * p, h * p);
+            };
+
+            ctx.fillStyle = 'rgba(0,0,0,0.45)';
+            ctx.fillRect(-6 * p, 6 * p, 12 * p, 2 * p);
+
+            drawPx(-5, -14, 10, 8, '#000000');
+            drawPx(-4, -13, 8, 6, team.skin || '#f59e0b');
+            drawPx(1, -11, 2, 2, '#ffffff');
+            drawPx(2, -11, 1, 2, '#1d4ed8');
+            drawPx(0, -8, 3, 1, '#000000');
+
+            drawPx(-6, -16, 12, 4, '#000000');
+            drawPx(-5, -15, 10, 3, team.hair || '#451a03');
+            drawPx(-6, -13, 3, 4, team.hair || '#451a03');
+            drawPx(-3, -16, 6, 2, '#78350f');
+
+            const kickTilt = pose === 'kick' ? -1 : 0;
+            const tx = -3 + kickTilt;
+            drawPx(-4 + kickTilt, -6, 8, 6, '#000000');
+            drawPx(tx, -5, 6, 4, team.primary);
+
+            const pat = team.kitPattern || '';
+            if (pat === 'hoops_red_black') {
+                drawPx(tx, -5, 6, 1, '#dc2626');
+                drawPx(tx, -4, 6, 1, '#111827');
+                drawPx(tx, -3, 6, 1, '#dc2626');
+                drawPx(tx, -2, 6, 1, '#111827');
+            } else if (pat === 'pinstripes_white_black') {
+                drawPx(tx + 1, -5, 1, 4, '#111827');
+                drawPx(tx + 4, -5, 1, 4, '#111827');
+            } else if (pat === 'solid_green_white') {
+                drawPx(tx + 2, -5, 2, 1, '#ffffff');
+                drawPx(tx, -2, 6, 0.8, '#ffffff');
+            } else if (pat === 'tricolor_chest_band') {
+                drawPx(tx, -4, 6, 1, '#dc2626');
+                drawPx(tx, -3, 6, 1, '#111827');
+            } else if (pat === 'sash_black_white') {
+                drawPx(tx + 4, -5, 2, 1, '#ffffff');
+                drawPx(tx + 2, -4, 2, 1, '#ffffff');
+                drawPx(tx + 1, -3, 2, 1, '#ffffff');
+                drawPx(tx, -2, 2, 1, '#ffffff');
+                drawPx(tx + 1, -4, 1, 1, '#dc2626');
+            } else if (pat === 'real_white_gold') {
+                drawPx(tx, -5, 1, 4, '#facc15');
+                drawPx(tx + 5, -5, 1, 4, '#facc15');
+                drawPx(tx + 2, -5, 2, 1, '#1d4ed8');
+            } else if (pat === 'stripes_blaugrana') {
+                drawPx(tx, -5, 2, 4, '#1d4ed8');
+                drawPx(tx + 2, -5, 2, 4, '#dc2626');
+                drawPx(tx + 4, -5, 2, 4, '#1d4ed8');
+            } else if (pat === 'solid_sky_white') {
+                drawPx(tx, -5, 6, 1, '#ffffff');
+            } else if (pat === 'psg_center_stripe') {
+                drawPx(tx + 1.5, -5, 3, 4, '#ffffff');
+                drawPx(tx + 2, -5, 2, 4, '#dc2626');
+            } else if (pat === 'bayern_red_white') {
+                drawPx(tx + 1, -5, 4, 1, '#ffffff');
+                drawPx(tx, -2, 6, 1, '#ffffff');
+            } else {
+                drawPx(tx + 2, -5, 2, 4, team.secondary || '#ffffff');
+            }
+
+            drawPx(-7, -5, 3, 3, '#000000');
+            drawPx(-6, -5, 2, 1, team.primary);
+            drawPx(-6, -4, 2, 2, team.skin || '#f59e0b');
+            drawPx(4, -4, 3, 3, '#000000');
+            drawPx(4, -4, 2, 1, team.primary);
+            drawPx(4, -3, 2, 2, team.skin || '#f59e0b');
+
+            drawPx(-4, 0, 8, 3, '#000000');
+            drawPx(-3, 0, 6, 2, team.shorts || '#18181b');
+
+            const sockColor = team.socks || team.primary;
+            if (pose === 'kick') {
+                drawPx(2, 1, 5, 3, '#000000');
+                drawPx(2, 1, 2, 2, sockColor);
+                drawPx(4, 1, 3, 2, '#111827');
+                drawPx(5, 1, 2, 1, '#ffffff');
+                drawPx(-4, 2, 3, 2, sockColor);
+                drawPx(-4, 4, 3, 2, '#111827');
+            } else {
+                const stride = Math.sin(frameCount * 0.35) * 2;
+                drawPx(-3, 2 + stride * 0.3, 3, 2, sockColor);
+                drawPx(-3, 4 + stride * 0.3, 3, 2, '#111827');
+                drawPx(1, 2 - stride * 0.3, 3, 2, sockColor);
+                drawPx(1, 4 - stride * 0.3, 3, 2, '#111827');
+            }
+
+            ctx.restore();
+        }
+
+        function drawPixelSoccerBall(bx, by, radius = 14, isFire = false) {
+            ctx.save();
+            for (let t = 1; t <= 4; t++) {
+                ctx.fillStyle = isFire
+                    ? `rgba(250, 204, 21, ${0.45 - t * 0.09})`
+                    : `rgba(255, 255, 255, ${0.35 - t * 0.07})`;
+                ctx.fillRect(bx - radius - t * 7, by - radius * 0.7, radius * 1.4, radius * 1.4);
+            }
+
+            ctx.translate(bx, by);
+            const s = radius / 5;
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(-5 * s, -3 * s, 10 * s, 6 * s);
+            ctx.fillRect(-3 * s, -5 * s, 6 * s, 10 * s);
+            ctx.fillRect(-4 * s, -4 * s, 8 * s, 8 * s);
+
+            ctx.fillStyle = isFire && frameCount % 2 === 0 ? '#fde047' : '#ffffff';
+            ctx.fillRect(-4 * s, -2 * s, 8 * s, 4 * s);
+            ctx.fillRect(-2 * s, -4 * s, 4 * s, 8 * s);
+            ctx.fillRect(-3 * s, -3 * s, 6 * s, 6 * s);
+
+            ctx.fillStyle = isFire ? '#dc2626' : '#111827';
+            ctx.fillRect(-1 * s, -1 * s, 2 * s, 2 * s);
+            ctx.fillRect(-4 * s, -3 * s, 2 * s, 2 * s);
+            ctx.fillRect(2 * s, -3 * s, 2 * s, 2 * s);
+            ctx.fillRect(-3 * s, 2 * s, 2 * s, 2 * s);
+            ctx.fillRect(2 * s, 2 * s, 2 * s, 2 * s);
+
+            ctx.restore();
+        }
+
+        function drawArenaLoop() {
+            frameCount++;
+            processNextPenaltyShot();
+
+            ctx.save();
+            if (state.screenShake > 0) {
+                ctx.translate((Math.random() - 0.5) * state.screenShake, (Math.random() - 0.5) * state.screenShake);
+                state.screenShake *= 0.85;
+                if (state.screenShake < 0.5) state.screenShake = 0;
+            }
+
+            const fieldOffset = 52;
+
+            ctx.fillStyle = '#090d16';
+            ctx.fillRect(0, 0, canvas.width, 205 + fieldOffset);
+
+            const t0 = state.matchTeams[0];
+            const t1 = state.matchTeams[1];
+            for (let row = 0; row < 3; row++) {
+                for (let col = 0; col < 26; col++) {
+                    const fanBounce = Math.abs(Math.sin(frameCount * 0.15 + col + row)) * 3;
+                    ctx.fillStyle = col < 13
+                        ? (col % 2 === 0 ? t0.primary : t0.secondary)
+                        : (col % 2 === 0 ? t1.primary : t1.secondary);
+                    ctx.fillRect(8 + col * 15.5, 212 + row * 10 - fanBounce, 8, 8);
+                }
+            }
+
+            ctx.fillStyle = '#111827';
+            ctx.fillRect(0, 192 + fieldOffset, canvas.width, 16);
+            ctx.fillStyle = '#fde047';
+            ctx.font = '900 9px "Press Start 2P", monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText(`★ ${t0.short} vs ${t1.short} • PIXEL ARENA ★`, 207, 203 + fieldOffset);
+
+            for (let r = 0; r < 14; r++) {
+                ctx.fillStyle = r % 2 === 0 ? '#15803d' : '#166534';
+                ctx.fillRect(0, 208 + fieldOffset + r * 32, canvas.width, 32);
+            }
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(52, 208 + fieldOffset, 310, 145);
+            ctx.strokeRect(112, 208 + fieldOffset, 190, 68);
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(203, 472, 8, 8);
+
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 6;
+            ctx.strokeRect(118, 178 + fieldOffset, 178, 72);
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.28)';
+            ctx.lineWidth = 1.5;
+            for (let nx = 128; nx < 296; nx += 12) {
+                ctx.beginPath(); ctx.moveTo(nx, 178 + fieldOffset); ctx.lineTo(nx, 250 + fieldOffset); ctx.stroke();
+            }
+            for (let ny = 188 + fieldOffset; ny < 250 + fieldOffset; ny += 12) {
+                ctx.beginPath(); ctx.moveTo(118, ny); ctx.lineTo(296, ny); ctx.stroke();
+            }
+
+            const defSide = state.activeShot ? (state.activeShot.shooter.side === 0 ? 1 : 0) : 1;
+            const defTeam = state.matchTeams[defSide];
+            let keeperX = 207 + Math.sin(frameCount * 0.08) * 42;
+            let keeperY = 238 + fieldOffset;
+            if (state.activeShot && state.activeShot.progress > 0.45) {
+                if (state.activeShot.outcome === 'saved_keeper') {
+                    keeperX = state.activeShot.targetX;
+                    keeperY = state.activeShot.targetY + 10;
+                } else {
+                    keeperX = 207 + (state.activeShot.targetX > 207 ? -48 : 48);
+                }
+            }
+            drawPixelArtPlayer(keeperX, keeperY, 1.15, defTeam, 'run', false);
+
+            ctx.fillStyle = state.keeperGloveCharges[defSide] > 0 ? '#facc15' : '#ffffff';
+            ctx.fillRect(keeperX - 24, keeperY - 14, 9, 9);
+            ctx.fillRect(keeperX + 15, keeperY - 14, 9, 9);
+
+            state.wallDefenders.slice(0, 3).forEach((def, idx) => {
+                const wx = 152 + idx * 55;
+                const wy = 315 + fieldOffset + Math.abs(Math.sin(frameCount * 0.12 + idx)) * -5;
+                const dTeam = state.matchTeams[def.side || 0];
+                drawPixelArtPlayer(wx, wy, 0.92, dTeam, 'run', false);
+
+                const av = getCachedAvatarImage(def.avatarUrl);
+                if (av && av.complete && av.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(wx, wy - 44, 11, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(av, wx - 11, wy - 55, 22, 22);
+                    ctx.restore();
+                }
+                ctx.fillStyle = 'rgba(0,0,0,0.75)';
+                ctx.fillRect(wx - 24, wy + 16, 48, 10);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '700 7px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(def.username.substring(0, 9), wx, wy + 23);
+            });
+
+            for (let i = state.streakers.length - 1; i >= 0; i--) {
+                const st = state.streakers[i];
+                st.x += st.vx;
+                const sy = st.y + Math.abs(Math.sin(frameCount * 0.35)) * -8;
+
+                drawPixelArtPlayer(st.x, sy, 1.05, st.team, 'run', true);
+
+                const sImg = getCachedAvatarImage(st.user.avatarUrl);
+                if (sImg && sImg.complete && sImg.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(st.x, sy - 46, 15, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(sImg, st.x - 15, sy - 61, 30, 30);
+                    ctx.restore();
+                    ctx.strokeStyle = '#22d3ee';
+                    ctx.lineWidth = 2.5;
+                    ctx.beginPath();
+                    ctx.arc(st.x, sy - 46, 15, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = '#083344';
+                ctx.strokeStyle = '#22d3ee';
+                ctx.lineWidth = 1.5;
+                ctx.fillRect(st.x - 42, sy - 25, 84, 13);
+                ctx.strokeRect(st.x - 42, sy - 25, 84, 13);
+                ctx.fillStyle = '#ffffff';
+                ctx.font = '900 8px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(`🏃 ${st.user.username.substring(0, 11)}`, st.x, sy - 16);
+
+                if (st.x > canvas.width + 60) {
+                    state.streakers.splice(i, 1);
+                }
+            }
+
+            if (state.activeShot) {
+                const shot = state.activeShot;
+                shot.progress += shot.speed;
+                const isSuper = shot.shooter.tier === 'super';
+
+                const runRatio = Math.min(1, shot.progress / 0.42);
+                const playerX = 135 + runRatio * 52;
+                const playerY = 518 - runRatio * 36 - (shot.progress > 0.35 && shot.progress < 0.65 ? 16 : 0);
+                const pose = shot.progress >= 0.38 ? 'kick' : 'run';
+
+                drawPixelArtPlayer(playerX, playerY, isSuper ? 2.15 : 1.85, shot.attTeam, pose, isSuper);
+
+                const shooterImg = getCachedAvatarImage(shot.shooter.user.avatarUrl);
+                if (shooterImg && shooterImg.complete && shooterImg.naturalWidth > 0) {
+                    ctx.save();
+                    ctx.beginPath();
+                    ctx.arc(playerX - 38, playerY - 35, 18, 0, Math.PI * 2);
+                    ctx.clip();
+                    ctx.drawImage(shooterImg, playerX - 56, playerY - 53, 36, 36);
+                    ctx.restore();
+                    ctx.strokeStyle = shot.attTeam.primary;
+                    ctx.lineWidth = 3;
+                    ctx.beginPath();
+                    ctx.arc(playerX - 38, playerY - 35, 18, 0, Math.PI * 2);
+                    ctx.stroke();
+                }
+
+                ctx.fillStyle = 'rgba(0,0,0,0.88)';
+                ctx.fillRect(playerX - 65, playerY + 26, 130, 16);
+                ctx.fillStyle = '#fde047';
+                ctx.font = '900 10px Inter';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${shot.shooter.user.username} (${shot.attTeam.short})`, playerX, playerY + 37);
+
+                let ballX = 207;
+                let ballY = 475;
+                if (shot.progress >= 0.42) {
+                    if (!shot.kickSoundPlayed) {
+                        shot.kickSoundPlayed = true;
+                        playKickSound();
+                    }
+                    const ballRatio = (shot.progress - 0.42) / 0.58;
+                    const endY = shot.outcome === 'saved_wall' ? (315 + fieldOffset) : shot.targetY;
+                    ballX = 207 + (shot.targetX - 207) * ballRatio;
+                    ballY = 475 + (endY - 475) * ballRatio - Math.sin(ballRatio * Math.PI) * 35;
+                }
+                drawPixelSoccerBall(ballX, ballY, isSuper ? 20 : 14, isSuper);
+
+                if (shot.progress >= 1 && !shot.resolved) {
+                    shot.resolved = true;
+                    const side = shot.shooter.side;
+                    if (shot.outcome === 'goal') {
+                        state.scores[side] += shot.goalsValue;
+                        updateScoresUI();
+                        playGoalChimeSound();
+                        state.screenShake = isSuper ? 25 : 10;
+                        state.flashAlpha = isSuper ? 0.5 : 0.22;
+                        state.flashColor = shot.attTeam.primary;
+                        spawnParticles(shot.targetX, shot.targetY, shot.attTeam.primary, isSuper ? 35 : 16);
+                        spawnFloatingText(207, 260, isSuper ? `🔥 PODERZÃO! +${shot.goalsValue} GOLS!` : `⚽ GOOOOL! +${shot.goalsValue}`, '#fde047', isSuper ? 20 : 16);
+                    } else if (shot.outcome === 'saved_keeper') {
+                        playCrowdGoalRoar(0.95);
+                        spawnParticles(shot.targetX, shot.targetY, '#38bdf8', 12);
+                        spawnFloatingText(shot.targetX, shot.targetY, `🧤 DEFENDEU O GOLEIRO!`, '#38bdf8', 15);
+                    } else {
+                        playCrowdGoalRoar(0.95);
+                        spawnParticles(207, 315 + fieldOffset, '#f43f5e', 12);
+                        spawnFloatingText(207, 305 + fieldOffset, `🧱 BLOQUEADO PELA BARREIRA!`, '#f43f5e', 14);
+                    }
+                    state.activeShot = null;
+                }
+            } else {
+                drawPixelSoccerBall(207, 475, 13, false);
+            }
+
+            if (state.varEvent) {
+                const v = state.varEvent;
+                v.timer--;
+
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.88)';
+                ctx.strokeStyle = '#a855f7';
+                ctx.lineWidth = 4;
+                ctx.beginPath();
+                ctx.roundRect(28, 285, 358, 175, 14);
+                ctx.fill();
+                ctx.stroke();
+
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 4;
+                ctx.strokeRect(52, 305, 110, 72);
+                ctx.fillStyle = '#1e1b4b';
+                ctx.fillRect(54, 307, 106, 68);
+                ctx.fillStyle = '#fde047';
+                ctx.font = '900 14px "Press Start 2P", monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText('VAR', 107, 348);
+
+                const refRunX = 265 + Math.sin(frameCount * 0.3) * 18;
+                drawPixelArtPlayer(refRunX, 355, 1.55, { primary: '#facc15', secondary: '#000000', shorts: '#000000', socks: '#000000', skin: '#fde68a', hair: '#111827' }, 'run', false);
+
+                ctx.fillStyle = '#e879f9';
+                ctx.font = '900 11px Inter';
+                ctx.fillText(`📺 ${v.user.username} ACIONOU O VAR!`, 207, 406);
+
+                ctx.fillStyle = '#ef4444';
+                ctx.font = '900 15px "Black Ops One", sans-serif';
+                ctx.fillText(`❌ -${v.annulled} GOLS ANULADOS DO ${state.matchTeams[v.rivalSide].name}!`, 207, 428);
+
+                ctx.fillStyle = '#4ade80';
+                ctx.font = '900 13px "Black Ops One", sans-serif';
+                ctx.fillText(`✅ +${v.bonus} GOLS PARA O ${state.matchTeams[v.callerSide].name}!`, 207, 448);
+
+                if (v.timer <= 0) {
+                    state.varEvent = null;
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.vy += 0.15;
+                p.alpha -= 0.03;
+                if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.alpha;
+                ctx.fillRect(p.x, p.y, 6, 6);
+                ctx.globalAlpha = 1;
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                const ft = floatingTexts[i];
+                ft.y += ft.vy;
+                ft.alpha -= 0.022;
+                if (ft.alpha <= 0) { floatingTexts.splice(i, 1); continue; }
+                ctx.save();
+                ctx.globalAlpha = ft.alpha;
+                ctx.font = `900 ${ft.size}px "Black Ops One", sans-serif`;
+                ctx.fillStyle = ft.color;
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 3;
+                ctx.textAlign = 'center';
+                ctx.strokeText(ft.text, ft.x, ft.y);
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ctx.restore();
+            }
+
+            if (state.flashAlpha > 0) {
+                ctx.fillStyle = state.flashColor;
+                ctx.globalAlpha = state.flashAlpha;
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                state.flashAlpha -= 0.04;
+            }
+
+            ctx.restore();
+        }
+
+        // MOTOR ANTI-CONGELAMENTO (Web Worker 60 FPS):
+        let backgroundRenderWorker = null;
+        function startUnthrottledGameLoop() {
+            try {
+                const workerBlob = new Blob([`
+                    setInterval(() => postMessage('tick'), 1000 / 60);
+                `], { type: 'application/javascript' });
+                backgroundRenderWorker = new Worker(URL.createObjectURL(workerBlob));
+                backgroundRenderWorker.onmessage = () => {
+                    drawArenaLoop();
+                };
+            } catch (e) {
+                setInterval(drawArenaLoop, 1000 / 60);
+            }
+        }
+
+        function spawnParticles(x, y, color, count = 14) {
+            for (let i = 0; i < count; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 5 + 1.5;
+                particles.push({
+                    x, y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed - 1.5,
+                    color,
+                    alpha: 1
+                });
+            }
+        }
+
+        function spawnFloatingText(x, y, text, color, size = 15) {
+            floatingTexts.push({ x, y, text, color, size, alpha: 1, vy: -1.4 });
+        }
+
+        /* =========================================================================
+           6. CONEXÃO SOCKET.IO + SIMULADOR + GERADOR DO SERVER.JS (BYPASS EULER v2.5)
+           ========================================================================= */
+        const urlParams = new URLSearchParams(window.location.search);
+        const isObsCleanMode = urlParams.get('mode') === 'obs';
+        const syncChannel = new BroadcastChannel('pixel_penalty_var_channel');
+        let socket = null;
+        let realEventsCount = 0;
+
+        function setupObsUrlField() {
+            const baseUrl = window.location.href.split('?')[0];
+            document.getElementById('obsUrlInput').value = `${baseUrl}?mode=obs`;
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toastNotification');
+            document.getElementById('toastMessage').innerText = msg;
+            toast.classList.remove('hidden');
+            toast.classList.add('flex');
+            setTimeout(() => { toast.classList.add('hidden'); toast.classList.remove('flex'); }, 3000);
+        }
+
+        function copyObsLink() {
+            const input = document.getElementById('obsUrlInput');
+            input.select();
+            document.execCommand('copy');
+            showToast('Link copiado! Cole no OBS, TikTok Live Studio ou Celular.');
+        }
+
+        function adjustObsViewportScale() {
+            const frame = document.getElementById('streamFrame');
+            if (document.body.classList.contains('obs-clean-mode')) {
+                const scale = Math.min(window.innerWidth / 414, window.innerHeight / 736);
+                frame.style.transform = `scale(${scale})`;
+            } else {
+                frame.style.transform = 'scale(1)';
+            }
+        }
+        window.addEventListener('resize', adjustObsViewportScale);
+
+        function toggleMobileDrawer() {
+            const drawer = document.getElementById('mobileDrawerModal');
+            drawer.classList.toggle('hidden');
+            drawer.classList.toggle('flex');
+        }
+
+        function enterTrueFullscreen() {
+            const docEl = document.documentElement;
+            const requestFs = docEl.requestFullscreen || docEl.webkitRequestFullscreen;
+            if (requestFs) requestFs.call(docEl).catch(() => {});
+        }
+
+        function broadcastAndRun(type, payload) {
+            tryAutoUnlockAudio();
+            syncChannel.postMessage({ type, payload });
+            if (socket && socket.connected) {
+                socket.emit('admin_command', { type, payload });
+            } else {
+                handleRemoteCommand(type, payload);
+            }
+        }
+
+        function handleRemoteCommand(type, payload) {
+            if (type === 'vote') {
+                triggerVoteEvent(payload.side, payload.tier, payload.user, payload.giftName, payload.voteClubCode);
+            } else if (type === 'like') {
+                triggerLikeEvent(payload.count || 20, payload.user);
+            } else if (type === 'follow') {
+                triggerFollowEvent(payload.side || 0, payload.user);
+            } else if (type === 'start_voting') {
+                startPreMatchVoting();
+            } else if (type === 'set_matchup') {
+                setMatchTeamsByCode(payload.code0, payload.code1);
+            } else if (type === 'reset') {
+                state.scores = [0, 0];
+                state.shooterQueue = [];
+                updateScoresUI();
+                renderShooterQueueHud();
+            } else if (type === 'tiktok_status') {
+                updateTikTokVisualStatus(payload);
+            }
+        }
+
+        syncChannel.onmessage = (e) => {
+            if (socket && socket.connected) return;
+            handleRemoteCommand(e.data.type, e.data.payload);
+        };
+
+        function appendLiveLog(text, colorClass = 'text-emerald-300') {
+            const timeStr = new Date().toLocaleTimeString('pt-BR');
+            const pcLog = document.getElementById('pcLiveLogBox');
+            const mobLog = document.getElementById('mobileLiveLogBox');
+            const html = `<div class="${colorClass}">[${timeStr}] ${text}</div>`;
+            if (pcLog) pcLog.insertAdjacentHTML('afterbegin', html);
+            if (mobLog) mobLog.insertAdjacentHTML('afterbegin', html);
+        }
+
+        function updateTikTokVisualStatus(payload) {
+            const pcStatus = document.getElementById('pcTikTokDetailedStatus');
+            const mobStatus = document.getElementById('mobileConnStatus');
+            const hudText = document.getElementById('hudLiveText');
+            const topBadge = document.getElementById('connectionStatusBadge');
+
+            if (pcStatus) pcStatus.innerText = payload.message;
+            if (mobStatus) mobStatus.innerText = payload.message;
+            appendLiveLog(payload.message);
+
+            if (payload.status === 'connected') {
+                if (chaosInterval) toggleChaosBot();
+                if (hudText) hudText.innerText = `🟢 ARENA ON`;
+                if (topBadge) topBadge.innerText = `🟢 AO VIVO: @${payload.username}`;
+                playGoalChimeSound();
+            }
+        }
+
+        function initSocketConnection() {
+            if (typeof io === 'undefined') return;
+            try {
+                const serverUrl = (window.location.port === '3000') ? window.location.origin : 'http://localhost:3000';
+                socket = io(serverUrl, { reconnectionAttempts: 10 });
+
+                socket.on('connect', () => {
+                    appendLiveLog('✅ Conectado ao server.js local (Bypass Euler v2.5 + Anti-OCR ativo).', 'text-cyan-300');
+                });
+
+                socket.on('live_event', (data) => {
+                    realEventsCount++;
+                    document.getElementById('realEventsCounter').innerText = `${realEventsCount} eventos reais`;
+                    if (data.type === 'vote') {
+                        const teamLabel = state.matchTeams[data.side] ? state.matchTeams[data.side].short : `Time ${data.side + 1}`;
+                        appendLiveLog(`⚽ ${data.user.username} -> ${teamLabel} (${data.giftName || data.comment || 'Chute'})`, 'text-emerald-300');
+                        triggerVoteEvent(data.side, data.tier, data.user, data.giftName, data.voteClubCode);
+                    } else if (data.type === 'like') {
+                        triggerLikeEvent(data.count || 15, data.user);
+                    } else if (data.type === 'follow') {
+                        appendLiveLog(`🏃 NOVO TORCEDOR: ${data.user.username} invadiu o campo!`, 'text-cyan-300');
+                        triggerFollowEvent(data.side || 0, data.user);
+                    } else if (data.type === 'chat_raw') {
+                        appendLiveLog(`💬 ${data.username}: "${data.comment}" (Sem 1/2)`, 'text-gray-400');
+                    }
+                });
+
+                socket.on('admin_command', (cmd) => handleRemoteCommand(cmd.type, cmd.payload));
+            } catch (e) {}
+        }
+
+        function connectToTikTokLive() {
+            tryAutoUnlockAudio();
+            const username = document.getElementById('tiktokUsernameInput').value.trim().replace('@', '');
+            if (!username) return showToast('Digite seu @ do TikTok primeiro!');
+            if (socket && socket.connected) {
+                socket.emit('connect_tiktok', { username });
+            } else {
+                showToast('Aguardando server.js... Verifique o terminal!');
+            }
+        }
+
+        function connectToTikTokFromMobile() {
+            tryAutoUnlockAudio();
+            const username = document.getElementById('mobileTiktokInput').value.trim().replace('@', '');
+            if (!username) return showToast('Digite seu @ do TikTok!');
+            if (socket && socket.connected) socket.emit('connect_tiktok', { username });
+        }
+
+        let chaosInterval = null;
+        function toggleChaosBot() {
+            const btn = document.getElementById('chaosBotBtn');
+            if (chaosInterval) {
+                clearInterval(chaosInterval);
+                chaosInterval = null;
+                if (btn) btn.innerText = '🔥 Simulador: OFF';
+            } else {
+                if (btn) btn.innerText = '⏹️ Parar Simulador';
+                chaosInterval = setInterval(() => {
+                    const side = Math.random() < 0.5 ? 0 : 1;
+                    const simUser = createSimulatedUser(side);
+
+                    if (state.phase === 'voting') {
+                        const randomClub = ALL_CLUBS[Math.floor(Math.random() * ALL_CLUBS.length)];
+                        triggerVoteEvent(side, 'comment', simUser, null, randomClub.code);
+                        return;
+                    }
+
+                    const roll = Math.random();
+                    if (roll < 0.14) {
+                        triggerLikeEvent(Math.floor(Math.random() * 55) + 25, simUser);
+                    } else if (roll < 0.22) {
+                        triggerFollowEvent(side, simUser);
+                    } else if (roll < 0.72) {
+                        triggerVoteEvent(side, 'comment', simUser);
+                    } else if (roll < 0.88) {
+                        triggerVoteEvent(side, 'rose', simUser, '⚡ Combo VIP');
+                    } else if (roll < 0.96) {
+                        triggerVoteEvent(side, 'var', simUser, '📺 VAR');
+                    } else {
+                        triggerVoteEvent(side, 'super', simUser, '🔥 Super Chute');
+                    }
+                }, 650);
+            }
+        }
+
+        function toggleObsMode() {
+            document.body.classList.toggle('obs-clean-mode');
+            document.getElementById('controlPanel').classList.toggle('hidden');
+            adjustObsViewportScale();
+        }
+
+        function openSetupModal() {
+            document.getElementById('setupModal').classList.remove('hidden');
+            document.getElementById('setupModal').classList.add('flex');
+        }
+
+        function closeSetupModal() {
+            document.getElementById('setupModal').classList.add('hidden');
+            document.getElementById('setupModal').classList.remove('flex');
+        }
+
+        setInterval(() => {
+            if (state.furyTimer > 0) {
+                state.furyTimer--;
+                if (state.furyTimer <= 0) state.furyMultiplier = 1;
+                updateLikesUI();
+            }
+
+            if (state.phase === 'voting') {
+                state.preVoteTime--;
+                document.getElementById('preVoteTimerBadge').innerText = `${state.preVoteTime}s`;
+                if (state.preVoteTime <= 0) {
+                    finishPreMatchVotingAndStart();
+                }
+                return;
+            }
+
+            if (state.isEnded) {
+                state.endCountdown--;
+                document.getElementById('voteTimerText').innerText = `${state.endCountdown}s`;
+                if (state.endCountdown <= 0) {
+                    startPreMatchVoting();
+                }
+                return;
+            }
+
+            state.timeRemaining--;
+            const mins = String(Math.floor(state.timeRemaining / 60)).padStart(2, '0');
+            const secs = String(state.timeRemaining % 60).padStart(2, '0');
+            document.getElementById('timerDisplay').innerText = `${mins}:${secs}`;
+
+            if (state.timeRemaining <= 0) {
+                state.isEnded = true;
+                state.endCountdown = 10;
+                const winIdx = state.scores[0] >= state.scores[1] ? 0 : 1;
+                document.getElementById('winnerLogoBox').innerHTML = getClubLogoSVG(state.matchTeams[winIdx]);
+                document.getElementById('winnerAnnouncement').innerText = `${state.matchTeams[winIdx].name} VENCEU!`;
+                document.getElementById('votingOverlay').classList.remove('hidden');
+                document.getElementById('votingOverlay').classList.add('flex');
+                playWhistleSound();
+                playCrowdGoalRoar(1.8);
+            }
+        }, 1000);
+
+        function populateServerJsTemplate() {
+            const area = document.getElementById('serverJsCodeArea');
+            if (!area) return;
+            const lines = [
+                "const express = require('express');",
+                "const http = require('http');",
+                "const https = require('https');",
+                "const { Server } = require('socket.io');",
+                "const tiktokConnector = require('tiktok-live-connector');",
+                "",
+                "const TikTokConnectionClass = tiktokConnector.TikTokLiveConnection || tiktokConnector.WebcastPushConnection;",
+                "const WebcastEvent = tiktokConnector.WebcastEvent || { CHAT: 'chat', GIFT: 'gift', LIKE: 'like', FOLLOW: 'follow', SOCIAL: 'social' };",
+                "const ControlEvent = tiktokConnector.ControlEvent || { CONNECTED: 'connected', DISCONNECTED: 'disconnected', ERROR: 'error' };",
+                "",
+                "const app = express();",
+                "const server = http.createServer(app);",
+                "const io = new Server(server, { cors: { origin: '*' } });",
+                "",
+                "app.use(express.static(__dirname));",
+                "",
+                "let tiktokConnection = null;",
+                "let lastVoterSide = {};",
+                "let recentFollowers = new Map();",
+                "let activeMatchKeywords = { side0: ['1', 'TIME 1', 'FLA', 'MENGO', 'B1'], side1: ['2', 'TIME 2', 'COR', 'TIMAO', 'B2'] };",
+                "",
+                "const TIKTOK_GIFT_CATALOG = {",
+                "    5655: { name: 'Combo 1', coins: 1, side: 0 },",
+                "    5269: { name: 'Combo 1', coins: 1, side: 1 },",
+                "    6064: { name: 'Combo 1', coins: 1, side: 1 },",
+                "    5827: { name: 'Combo 1', coins: 1, side: 1 },",
+                "    6592: { name: 'Combo 1', coins: 1, side: 1 },",
+                "    5487: { name: 'Combo 1', coins: 5, side: 0 },",
+                "    5879: { name: 'Combo VAR', coins: 30, side: 1 },",
+                "    5658: { name: 'Combo VAR', coins: 10, side: 0 },",
+                "    5585: { name: 'Super Poder', coins: 100, side: 0 },",
+                "    5660: { name: 'Super Poder', coins: 199, side: 1 },",
+                "    6093: { name: 'Combo VAR', coins: 99, side: 1 },",
+                "    5994: { name: 'Super Poder', coins: 1000, side: 1 },",
+                "    5659: { name: 'Super Poder', coins: 20000, side: 0 },",
+                "    5509: { name: 'Super Poder', coins: 29999, side: 0 },",
+                "    6788: { name: 'Super Poder', coins: 44999, side: 1 }",
+                "};",
+                "",
+                "function scrapeRoomIdDirectFromTikTokHtml(uniqueId) {",
+                "    return new Promise((resolve) => {",
+                "        const url = 'https://www.tiktok.com/@' + encodeURIComponent(uniqueId) + '/live';",
+                "        const req = https.get(url, {",
+                "            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36' },",
+                "            timeout: 7000",
+                "        }, (res) => {",
+                "            let html = '';",
+                "            res.on('data', chunk => { html += chunk; });",
+                "            res.on('end', () => {",
+                "                const m1 = html.match(/\"roomId\"\\s*:\\s*\"(\\d{10,25})\"/);",
+                "                const m2 = html.match(/\"room_id\"\\s*:\\s*\"(\\d{10,25})\"/);",
+                "                resolve((m1 && m1[1]) || (m2 && m2[1]) || null);",
+                "            });",
+                "        });",
+                "        req.on('error', () => resolve(null));",
+                "        req.on('timeout', () => { req.destroy(); resolve(null); });",
+                "    });",
+                "}",
+                "",
+                "function extractTikTokUser(data = {}) {",
+                "    const u = data.user || data.sender || data.fromUser || data;",
+                "    const rawHandle = u.uniqueId || u.displayId || data.uniqueId || data.displayId || u.nickname || 'torcedor';",
+                "    const cleanHandle = String(rawHandle).replace(/^@/, '').trim() || 'torcedor';",
+                "    let avatarUrl = '';",
+                "    if (u.profilePicture && Array.isArray(u.profilePicture.urls) && u.profilePicture.urls.length > 0) avatarUrl = u.profilePicture.urls[0];",
+                "    else if (u.profilePicture && Array.isArray(u.profilePicture.urlList) && u.profilePicture.urlList.length > 0) avatarUrl = u.profilePicture.urlList[0];",
+                "    else if (u.avatarThumb && Array.isArray(u.avatarThumb.urlList) && u.avatarThumb.urlList.length > 0) avatarUrl = u.avatarThumb.urlList[0];",
+                "    else if (typeof u.profilePictureUrl === 'string' && u.profilePictureUrl) avatarUrl = u.profilePictureUrl;",
+                "    else if (typeof data.profilePictureUrl === 'string' && data.profilePictureUrl) avatarUrl = data.profilePictureUrl;",
+                "    if (!avatarUrl) avatarUrl = 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(cleanHandle);",
+                "    return { uniqueId: cleanHandle, username: '@' + cleanHandle, initials: cleanHandle.substring(0, 2).toUpperCase(), avatarUrl };",
+                "}",
+                "",
+                "function extractChatComment(data = {}) {",
+                "    return String(data.comment ?? data.content ?? data.msg ?? data.text ?? '').trim();",
+                "}",
+                "",
+                "function extractGiftDetails(data = {}) {",
+                "    const giftObj = data.gift || {};",
+                "    const extObj = data.extendedGiftInfo || data.giftInfo || {};",
+                "    const giftId = Number(data.giftId ?? giftObj.id ?? extObj.id ?? 0);",
+                "    const cat = TIKTOK_GIFT_CATALOG[giftId] || null;",
+                "    const giftName = giftObj.name || extObj.name || data.giftName || (cat && cat.name) || 'Combo';",
+                "    const diamondCount = Number(giftObj.diamondCount ?? extObj.diamond_count ?? data.diamondCount ?? (cat && cat.coins) ?? 1) || 1;",
+                "    const repeatCount = Number(data.repeatCount ?? giftObj.repeatCount ?? 1) || 1;",
+                "    const giftType = Number(giftObj.type ?? giftObj.giftType ?? data.giftType ?? 0);",
+                "    const repeatEnd = Boolean(data.repeatEnd === true || data.repeatEnd === 1 || giftObj.repeatEnd === true || giftObj.repeatEnd === 1);",
+                "    return { giftName: String(giftName), totalCoins: diamondCount * repeatCount, catalogSide: cat ? cat.side : null, isStreakInProgress: (giftType === 1 && !repeatEnd) };",
+                "}",
+                "",
+                "function detectSideByGiftName(giftName = '', catalogSide = null) {",
+                "    if (catalogSide === 0 || catalogSide === 1) return catalogSide;",
+                "    const g = giftName.toUpperCase();",
+                "    if (g.includes('ROSE') || g.includes('ROSA') || g.includes('BEER') || g.includes('CERVEJA') || g.includes('HEART') || g.includes('CORA') || g.includes('ROCKET') || g.includes('FOGUETE') || g.includes('LION') || g.includes('LEÃO')) return 0;",
+                "    if (g.includes('COFFEE') || g.includes('CAF') || g.includes('ICE CREAM') || g.includes('CASQUINHA') || g.includes('TIKTOK') || g.includes('LIGHTNING') || g.includes('RAIO') || g.includes('SUNGLASS') || g.includes('ÓCULOS') || g.includes('CROWN') || g.includes('COROA') || g.includes('GALAXY') || g.includes('GALÁXIA') || g.includes('TROPHY') || g.includes('TROFÉU') || g.includes('UNIVERSE') || g.includes('UNIVERSO')) return 1;",
+                "    return null;",
+                "}",
+                "",
+                "function detectClubVoteCode(msg = '') {",
+                "    if (/\\bB1\\b/.test(msg) || msg.includes('FLA') || msg.includes('MENGO')) return 'B1';",
+                "    if (/\\bB2\\b/.test(msg) || msg.includes('COR') || msg.includes('TIMAO') || msg.includes('TIMÃO')) return 'B2';",
+                "    if (/\\bB3\\b/.test(msg) || msg.includes('PAL') || msg.includes('VERDAO') || msg.includes('VERDÃO')) return 'B3';",
+                "    if (/\\bB4\\b/.test(msg) || msg.includes('SAO') || msg.includes('SÃO PAULO') || msg.includes('SPFC')) return 'B4';",
+                "    if (/\\bB5\\b/.test(msg) || msg.includes('VASCO') || msg.includes('GIGANTE')) return 'B5';",
+                "    if (/\\bE1\\b/.test(msg) || msg.includes('REAL') || msg.includes('MADRID') || msg.includes('RMA')) return 'E1';",
+                "    if (/\\bE2\\b/.test(msg) || msg.includes('BARCA') || msg.includes('BARÇA') || msg.includes('BARCELONA')) return 'E2';",
+                "    if (/\\bE3\\b/.test(msg) || msg.includes('CITY') || msg.includes('MCI')) return 'E3';",
+                "    if (/\\bE4\\b/.test(msg) || msg.includes('PSG') || msg.includes('PARIS')) return 'E4';",
+                "    if (/\\bE5\\b/.test(msg) || msg.includes('BAYERN') || msg.includes('BAY')) return 'E5';",
+                "    return null;",
+                "}",
+                "",
+                "function detectMatchSideFromChat(msgUpper = '', clubCode = null) {",
+                "    if (msgUpper === '1' || msgUpper === '13' || /\\b1\\b/.test(msgUpper) || msgUpper.includes('TIME 1')) return 0;",
+                "    if (msgUpper === '2' || msgUpper === '22' || /\\b2\\b/.test(msgUpper) || msgUpper.includes('TIME 2')) return 1;",
+                "    for (const kw of activeMatchKeywords.side0) { if (kw && msgUpper.includes(kw)) return 0; }",
+                "    for (const kw of activeMatchKeywords.side1) { if (kw && msgUpper.includes(kw)) return 1; }",
+                "    if (clubCode) return clubCode.startsWith('B') ? 0 : 1;",
+                "    return null;",
+                "}",
+                "",
+                "async function connectTikTok(username) {",
+                "    const cleanUser = String(username || '').replace(/^@/, '').trim();",
+                "    if (!cleanUser) return;",
+                "    if (tiktokConnection) { try { tiktokConnection.disconnect(); } catch (e) {} }",
+                "    io.emit('admin_command', { type: 'tiktok_status', payload: { status: 'connecting', username: cleanUser, message: '⏳ Conectando na live de @' + cleanUser + '...' } });",
+                "    try {",
+                "        if (tiktokConnector.RoomIdRouteConfig) tiktokConnector.RoomIdRouteConfig.disableEulerFallbacks = true;",
+                "        if (tiktokConnector.IsLiveRouteConfig) tiktokConnector.IsLiveRouteConfig.disableEulerFallbacks = true;",
+                "        tiktokConnection = new TikTokConnectionClass(cleanUser, { processInitialData: false, enableExtendedGiftInfo: false, fetchRoomInfoOnConnect: false });",
+                "    } catch (e) {",
+                "        io.emit('admin_command', { type: 'tiktok_status', payload: { status: 'error', username: cleanUser, message: '❌ Erro: ' + e.message } });",
+                "        return;",
+                "    }",
+                "    tiktokConnection.on(WebcastEvent.CHAT || 'chat', data => {",
+                "        const rawComment = extractChatComment(data);",
+                "        const msg = rawComment.toUpperCase();",
+                "        const user = extractTikTokUser(data);",
+                "        const clubCode = detectClubVoteCode(msg);",
+                "        const side = detectMatchSideFromChat(msg, clubCode);",
+                "        if (side !== null || clubCode !== null) {",
+                "            const finalSide = side !== null ? side : 0;",
+                "            lastVoterSide[user.uniqueId] = finalSide;",
+                "            io.emit('live_event', { type: 'vote', side: finalSide, tier: 'comment', voteClubCode: clubCode, comment: rawComment, user });",
+                "        } else {",
+                "            io.emit('live_event', { type: 'chat_raw', username: user.username, comment: rawComment, user });",
+                "        }",
+                "    });",
+                "    tiktokConnection.on(WebcastEvent.GIFT || 'gift', data => {",
+                "        const giftInfo = extractGiftDetails(data);",
+                "        if (giftInfo.isStreakInProgress) return;",
+                "        const user = extractTikTokUser(data);",
+                "        let side = lastVoterSide[user.uniqueId] !== undefined ? lastVoterSide[user.uniqueId] : detectSideByGiftName(giftInfo.giftName, giftInfo.catalogSide);",
+                "        if (side === null) side = user.uniqueId.length % 2;",
+                "        const tier = giftInfo.totalCoins >= 100 ? 'super' : (giftInfo.totalCoins >= 10 ? 'var' : 'rose');",
+                "        io.emit('live_event', { type: 'vote', side, tier, coins: giftInfo.totalCoins, giftName: '⚡ Combo Especial', user });",
+                "    });",
+                "    tiktokConnection.on(WebcastEvent.LIKE || 'like', data => {",
+                "        const user = extractTikTokUser(data);",
+                "        const count = Number(data.likeCount ?? data.count ?? 15) || 15;",
+                "        io.emit('live_event', { type: 'like', count, user });",
+                "    });",
+                "    const handleFollow = data => {",
+                "        const user = extractTikTokUser(data);",
+                "        const now = Date.now();",
+                "        if (recentFollowers.has(user.uniqueId) && (now - recentFollowers.get(user.uniqueId)) < 8000) return;",
+                "        recentFollowers.set(user.uniqueId, now);",
+                "        const side = lastVoterSide[user.uniqueId] !== undefined ? lastVoterSide[user.uniqueId] : (user.uniqueId.length % 2);",
+                "        io.emit('live_event', { type: 'follow', side, user });",
+                "    };",
+                "    tiktokConnection.on(WebcastEvent.FOLLOW || 'follow', handleFollow);",
+                "    tiktokConnection.on(WebcastEvent.SOCIAL || 'social', data => {",
+                "        const dt = String(data.displayType || data.label || '').toLowerCase();",
+                "        if (dt.includes('follow')) handleFollow(data);",
+                "    });",
+                "    try {",
+                "        const scrapedId = await scrapeRoomIdDirectFromTikTokHtml(cleanUser);",
+                "        const st = scrapedId ? await tiktokConnection.connect(scrapedId) : await tiktokConnection.connect();",
+                "        const roomId = (st && st.roomId) ? st.roomId : (scrapedId || 'Ativa');",
+                "        io.emit('admin_command', { type: 'tiktok_status', payload: { status: 'connected', username: cleanUser, message: '🟢 CONECTADO NA LIVE DE @' + cleanUser + ' (Sala: ' + roomId + ')' } });",
+                "    } catch (err) {",
+                "        io.emit('admin_command', { type: 'tiktok_status', payload: { status: 'error', username: cleanUser, message: '❌ Falha ao conectar @' + cleanUser + ': Verifique se está AO VIVO!' } });",
+                "    }",
+                "}",
+                "",
+                "io.on('connection', socket => {",
+                "    socket.on('connect_tiktok', ({ username }) => connectTikTok(username));",
+                "    socket.on('update_match_keywords', ({ side0, side1 }) => {",
+                "        if (Array.isArray(side0)) activeMatchKeywords.side0 = side0;",
+                "        if (Array.isArray(side1)) activeMatchKeywords.side1 = side1;",
+                "    });",
+                "    socket.on('admin_command', cmd => io.emit('admin_command', cmd));",
+                "});",
+                "",
+                "server.listen(3000, '0.0.0.0', () => {",
+                "    console.log('✅ SERVIDOR PIXEL PENALTY SHOWDOWN + VAR (BYPASS EULER v2.5) RODANDO!');",
+                "});"
+            ];
+            area.value = lines.join('\n');
+        }
+
+        function copyServerCode() {
+            const area = document.getElementById('serverJsCodeArea');
+            area.select();
+            document.execCommand('copy');
+            showToast('Código copiado!');
+        }
+
+        function downloadServerFile() {
+            const code = document.getElementById('serverJsCodeArea').value;
+            const blob = new Blob([code], { type: 'application/javascript' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'server.js';
+            a.click();
+        }
+
+        window.onload = function () {
+            populateClubSelectors();
+            setupObsUrlField();
+            populateServerJsTemplate();
+            initSocketConnection();
+            updateMatchupHud();
+            startUnthrottledGameLoop();
+
+            if (isObsCleanMode) {
+                document.body.classList.add('obs-clean-mode');
+                document.getElementById('controlPanel').classList.add('hidden');
+                adjustObsViewportScale();
+            } else {
+                toggleChaosBot();
+            }
+        };
+    </script>
+</body>
+</html>
